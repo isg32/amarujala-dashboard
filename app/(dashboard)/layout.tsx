@@ -35,13 +35,17 @@ export default async function DashboardLayout({
           </SignedIn>
         </div>
       </header>
-      {user?.role === "admin" && (
+      {user && (
         <nav className="flex gap-4 border-b px-6 py-2 text-sm">
-          {MASTER_DATA_LINKS.map((link) => (
-            <Link key={link.href} href={link.href} className="text-muted-foreground hover:text-foreground">
-              {link.label}
-            </Link>
-          ))}
+          <Link href="/readers" className="text-muted-foreground hover:text-foreground">
+            Readers
+          </Link>
+          {user.role === "admin" &&
+            MASTER_DATA_LINKS.map((link) => (
+              <Link key={link.href} href={link.href} className="text-muted-foreground hover:text-foreground">
+                {link.label}
+              </Link>
+            ))}
         </nav>
       )}
       <main className="flex-1 p-6">{children}</main>
