@@ -4,6 +4,9 @@ import { requireAppUser, type AppUser } from "@/lib/auth/session";
 import { db } from "@/lib/db";
 import { readers, centers, cities, units, zones, appUsers, pocCenters } from "@/lib/db/schema";
 import type { ReaderInput } from "@/lib/validation/reader";
+import type { ParsedReaderRow } from "@/lib/bulk-upload/parse-readers";
+
+type Tx = Parameters<Parameters<typeof db.transaction>[0]>[0];
 
 export type ReaderFilters = {
   search?: string;
@@ -124,6 +127,35 @@ export async function listAssignableCentersWithPocs() {
   }));
 }
 
+// Shared by createReader and bulkCreateReaders — inserts one reader row and
+// derives its reader_code from the assigned id (never free-text, never
+// duplicated) in the same transaction.
+async function insertReaderRow(
+  tx: Tx,
+  createdBy: string,
+  input: {
+    name: string;
+    mobile: string;
+    email?: string;
+    address: string;
+    landmark?: string;
+    centerId: number;
+    assignedPocId?: string;
+    subscriptionStartDate: string;
+    remarks?: string;
+  }
+) {
+  const [inserted] = await tx
+    .insert(readers)
+    .values({ ...input, readerCode: "", createdBy })
+    .returning({ id: readers.id });
+
+  const readerCode = `RDR-${String(inserted.id).padStart(6, "0")}`;
+  await tx.update(readers).set({ readerCode }).where(eq(readers.id, inserted.id));
+
+  return { id: inserted.id, readerCode };
+}
+
 export async function createReader(input: ReaderInput) {
   const user = await requireAppUser();
 
@@ -131,27 +163,81 @@ export async function createReader(input: ReaderInput) {
     throw new Error("You cannot add a reader to a Center outside your assignment.");
   }
 
-  return db.transaction(async (tx) => {
-    const [inserted] = await tx
-      .insert(readers)
-      .values({
-        name: input.name,
-        mobile: input.mobile,
-        email: input.email,
-        address: input.address,
-        landmark: input.landmark,
-        centerId: input.centerId,
-        assignedPocId: input.assignedPocId,
-        subscriptionStartDate: input.subscriptionStartDate,
-        remarks: input.remarks,
-        readerCode: "", // placeholder, replaced below once we have the id
-        createdBy: user.id,
-      })
-      .returning({ id: readers.id });
+  return db.transaction((tx) => insertReaderRow(tx, user.id, input));
+}
 
-    const readerCode = `RDR-${String(inserted.id).padStart(6, "0")}`;
-    await tx.update(readers).set({ readerCode }).where(eq(readers.id, inserted.id));
+export type BulkCreateResult = {
+  insertedCount: number;
+  errors: { row: number; reason: string }[];
+};
 
-    return { id: inserted.id, readerCode };
-  });
+// Validates and inserts a batch of parsed spreadsheet rows. City/Center are
+// resolved by name against listAssignableCentersWithPocs() — which is
+// already center-scoped, so an AU POC referencing a Center outside their
+// assignment naturally fails to resolve rather than needing a separate check.
+// Invalid rows are reported, not silently dropped; valid rows are inserted
+// in one transaction.
+export async function bulkCreateReaders(parsedRows: ParsedReaderRow[]): Promise<BulkCreateResult> {
+  const user = await requireAppUser();
+  const availableCenters = await listAssignableCentersWithPocs();
+
+  const errors: { row: number; reason: string }[] = [];
+  const candidates: { row: number; centerId: number; data: Extract<ParsedReaderRow, { data: unknown }>["data"] }[] = [];
+  const seenMobiles = new Set<string>();
+
+  for (const parsed of parsedRows) {
+    if ("error" in parsed) {
+      errors.push({ row: parsed.row, reason: parsed.error });
+      continue;
+    }
+    const { data } = parsed;
+    const center = availableCenters.find(
+      (c) => c.name.toLowerCase() === data.center.toLowerCase() && c.cityName.toLowerCase() === data.city.toLowerCase()
+    );
+    if (!center) {
+      errors.push({ row: parsed.row, reason: `City/Center "${data.city} / ${data.center}" not found or not assigned to you` });
+      continue;
+    }
+    if (seenMobiles.has(data.mobile)) {
+      errors.push({ row: parsed.row, reason: `Duplicate mobile number ${data.mobile} within this file` });
+      continue;
+    }
+    seenMobiles.add(data.mobile);
+    candidates.push({ row: parsed.row, centerId: center.id, data });
+  }
+
+  if (candidates.length > 0) {
+    const existing = await db
+      .select({ mobile: readers.mobile })
+      .from(readers)
+      .where(inArray(readers.mobile, candidates.map((c) => c.data.mobile)));
+    const existingMobiles = new Set(existing.map((e) => e.mobile));
+
+    for (const candidate of candidates.filter((c) => existingMobiles.has(c.data.mobile))) {
+      errors.push({ row: candidate.row, reason: `Mobile number ${candidate.data.mobile} already exists` });
+    }
+  }
+  const toInsert = candidates.filter((c) => !errors.some((e) => e.row === c.row));
+
+  let insertedCount = 0;
+  if (toInsert.length > 0) {
+    await db.transaction(async (tx) => {
+      for (const candidate of toInsert) {
+        await insertReaderRow(tx, user.id, {
+          name: candidate.data.name,
+          mobile: candidate.data.mobile,
+          email: candidate.data.email,
+          address: candidate.data.address,
+          landmark: candidate.data.landmark,
+          centerId: candidate.centerId,
+          subscriptionStartDate: candidate.data.subscriptionStartDate,
+          remarks: candidate.data.remarks,
+        });
+        insertedCount++;
+      }
+    });
+  }
+
+  errors.sort((a, b) => a.row - b.row);
+  return { insertedCount, errors };
 }

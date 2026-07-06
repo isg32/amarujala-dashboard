@@ -37,9 +37,14 @@ export default async function ReadersPage({
     <div className="flex flex-col gap-6">
       <div className="flex items-center justify-between">
         <h1 className="text-lg font-semibold">Reader Directory</h1>
-        <Button render={<Link href="/readers/new" />} nativeButton={false}>
-          Add Reader
-        </Button>
+        <div className="flex gap-2">
+          <Button variant="outline" render={<Link href="/readers/bulk-upload" />} nativeButton={false}>
+            Bulk Upload
+          </Button>
+          <Button render={<Link href="/readers/new" />} nativeButton={false}>
+            Add Reader
+          </Button>
+        </div>
       </div>
 
       <Card>
