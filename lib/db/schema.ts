@@ -1,0 +1,262 @@
+import {
+  pgTable,
+  pgEnum,
+  serial,
+  text,
+  integer,
+  numeric,
+  boolean,
+  date,
+  timestamp,
+  char,
+  primaryKey,
+  uniqueIndex,
+} from "drizzle-orm/pg-core";
+import { sql } from "drizzle-orm";
+
+export const appRoleEnum = pgEnum("app_role", ["admin", "au_poc"]);
+export const readerStatusEnum = pgEnum("reader_status", ["active", "inactive"]);
+export const attendanceStatusEnum = pgEnum("attendance_status", [
+  "delivered",
+  "not_delivered",
+]);
+export const bulkScopeEnum = pgEnum("bulk_scope", [
+  "reader",
+  "center",
+  "city",
+  "unit",
+  "org",
+]);
+export const paymentMethodEnum = pgEnum("payment_method", [
+  "cash",
+  "upi",
+  "bank_transfer",
+  "razorpay",
+  "other",
+]);
+export const ledgerEntryTypeEnum = pgEnum("ledger_entry_type", [
+  "monthly_charge",
+  "payment",
+  "coupon_discount",
+  "adjustment",
+]);
+
+export const zones = pgTable("zones", {
+  id: serial("id").primaryKey(),
+  name: text("name").notNull(),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+});
+
+export const units = pgTable("units", {
+  id: serial("id").primaryKey(),
+  zoneId: integer("zone_id")
+    .notNull()
+    .references(() => zones.id),
+  name: text("name").notNull(),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+});
+
+export const cities = pgTable("cities", {
+  id: serial("id").primaryKey(),
+  unitId: integer("unit_id")
+    .notNull()
+    .references(() => units.id),
+  name: text("name").notNull(),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+});
+
+export const centers = pgTable("centers", {
+  id: serial("id").primaryKey(),
+  cityId: integer("city_id")
+    .notNull()
+    .references(() => cities.id),
+  name: text("name").notNull(),
+  address: text("address"),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+});
+
+// id = Neon Auth user id (text), not a serial — this table is keyed by the
+// auth provider's identity since Neon Auth sessions carry no role/custom data.
+export const appUsers = pgTable("app_users", {
+  id: text("id").primaryKey(),
+  name: text("name").notNull(),
+  email: text("email").notNull(),
+  role: appRoleEnum("role").notNull(),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+});
+
+export const pocCenters = pgTable(
+  "poc_centers",
+  {
+    pocUserId: text("poc_user_id")
+      .notNull()
+      .references(() => appUsers.id),
+    centerId: integer("center_id")
+      .notNull()
+      .references(() => centers.id),
+  },
+  (table) => [primaryKey({ columns: [table.pocUserId, table.centerId] })]
+);
+
+// History table, never a single current-price column: a city's price can
+// change over time, and past months must bill at the price active then.
+export const cityPricing = pgTable("city_pricing", {
+  id: serial("id").primaryKey(),
+  cityId: integer("city_id")
+    .notNull()
+    .references(() => cities.id),
+  price: numeric("price", { precision: 10, scale: 2 }).notNull(),
+  effectiveFrom: date("effective_from").notNull(),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+});
+
+export const readers = pgTable("readers", {
+  id: serial("id").primaryKey(),
+  readerCode: text("reader_code").notNull().unique(),
+  name: text("name").notNull(),
+  mobile: text("mobile").notNull(),
+  email: text("email"),
+  address: text("address").notNull(),
+  landmark: text("landmark"),
+  centerId: integer("center_id")
+    .notNull()
+    .references(() => centers.id),
+  assignedPocId: text("assigned_poc_id").references(() => appUsers.id),
+  subscriptionStartDate: date("subscription_start_date").notNull(),
+  status: readerStatusEnum("status").notNull().default("active"),
+  remarks: text("remarks"),
+  outstandingBalance: numeric("outstanding_balance", { precision: 10, scale: 2 })
+    .notNull()
+    .default("0"),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+  createdBy: text("created_by")
+    .notNull()
+    .references(() => appUsers.id),
+});
+
+export const readerTransfers = pgTable("reader_transfers", {
+  id: serial("id").primaryKey(),
+  readerId: integer("reader_id")
+    .notNull()
+    .references(() => readers.id),
+  fromCenterId: integer("from_center_id")
+    .notNull()
+    .references(() => centers.id),
+  toCenterId: integer("to_center_id")
+    .notNull()
+    .references(() => centers.id),
+  transferredAt: timestamp("transferred_at").notNull().defaultNow(),
+  transferredBy: text("transferred_by")
+    .notNull()
+    .references(() => appUsers.id),
+  remarks: text("remarks"),
+});
+
+export const attendance = pgTable(
+  "attendance",
+  {
+    id: serial("id").primaryKey(),
+    readerId: integer("reader_id")
+      .notNull()
+      .references(() => readers.id),
+    attendanceDate: date("attendance_date").notNull(),
+    status: attendanceStatusEnum("status").notNull(),
+    markedBy: text("marked_by")
+      .notNull()
+      .references(() => appUsers.id),
+    createdAt: timestamp("created_at").notNull().defaultNow(),
+  },
+  (table) => [
+    uniqueIndex("attendance_reader_date_idx").on(
+      table.readerId,
+      table.attendanceDate
+    ),
+  ]
+);
+
+// Audit trail of bulk-mark actions; the attendance rows themselves are
+// still the source of truth, this just records who triggered a bulk mark
+// and over what scope.
+export const attendanceBulkRuns = pgTable("attendance_bulk_runs", {
+  id: serial("id").primaryKey(),
+  scope: bulkScopeEnum("scope").notNull(),
+  scopeId: integer("scope_id"),
+  dateFrom: date("date_from").notNull(),
+  dateTo: date("date_to").notNull(),
+  createdBy: text("created_by")
+    .notNull()
+    .references(() => appUsers.id),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+});
+
+export const payments = pgTable("payments", {
+  id: serial("id").primaryKey(),
+  readerId: integer("reader_id")
+    .notNull()
+    .references(() => readers.id),
+  amount: numeric("amount", { precision: 10, scale: 2 }).notNull(),
+  method: paymentMethodEnum("method").notNull(),
+  methodOtherLabel: text("method_other_label"),
+  transactionReference: text("transaction_reference"),
+  remarks: text("remarks"),
+  paymentDate: date("payment_date").notNull(),
+  recordedBy: text("recorded_by")
+    .notNull()
+    .references(() => appUsers.id),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+});
+
+export const coupons = pgTable("coupons", {
+  id: serial("id").primaryKey(),
+  code: text("code").notNull().unique(),
+  description: text("description"),
+  discountAmount: numeric("discount_amount", { precision: 10, scale: 2 }).notNull(),
+  active: boolean("active").notNull().default(true),
+  createdBy: text("created_by")
+    .notNull()
+    .references(() => appUsers.id),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+});
+
+export const readerCoupons = pgTable("reader_coupons", {
+  id: serial("id").primaryKey(),
+  couponId: integer("coupon_id")
+    .notNull()
+    .references(() => coupons.id),
+  readerId: integer("reader_id")
+    .notNull()
+    .references(() => readers.id),
+  appliedAmount: numeric("applied_amount", { precision: 10, scale: 2 }).notNull(),
+  appliedBy: text("applied_by")
+    .notNull()
+    .references(() => appUsers.id),
+  appliedAt: timestamp("applied_at").notNull().defaultNow(),
+  remarks: text("remarks"),
+});
+
+// Append-only. readers.outstanding_balance is a running total maintained
+// alongside this table (same transaction, via lib/billing/ledger.ts), never
+// mutated anywhere else — this table is what makes that total auditable.
+// The partial unique index prevents ever double-billing a reader for the
+// same month even if a "Close Month" action is accidentally triggered twice.
+export const readerBillingLedger = pgTable(
+  "reader_billing_ledger",
+  {
+    id: serial("id").primaryKey(),
+    readerId: integer("reader_id")
+      .notNull()
+      .references(() => readers.id),
+    entryType: ledgerEntryTypeEnum("entry_type").notNull(),
+    amount: numeric("amount", { precision: 10, scale: 2 }).notNull(),
+    billingPeriod: char("billing_period", { length: 7 }), // 'YYYY-MM'
+    referenceId: integer("reference_id"),
+    description: text("description"),
+    createdBy: text("created_by").references(() => appUsers.id),
+    createdAt: timestamp("created_at").notNull().defaultNow(),
+  },
+  (table) => [
+    uniqueIndex("ledger_reader_period_charge_idx")
+      .on(table.readerId, table.billingPeriod)
+      .where(sql`${table.entryType} = 'monthly_charge'`),
+  ]
+);
