@@ -52,6 +52,8 @@ After that, `createPoc()` works from within the app for every subsequent AU POC 
 
 **Billing formula (confirmed, see plan for full rationale):** `daily_rate = price_effective_that_day / days_in_month`; monthly charge = sum of `daily_rate` over days marked `delivered`. Unmarked days count as delivered at month-close. Month-close is an admin-triggered action (no cron dependency for v1), not automatic.
 
+**shadcn is on the Base UI variant, not Radix** (`components.json` `base: "base"`) — composing a non-button element (e.g. a `Link`) via a component's `render` prop needs `nativeButton={false}` on `Button`, or Base UI logs a console warning about missing native button semantics. Check `rules/base-vs-radix.md` in the shadcn skill before using `asChild`-style patterns from memory — this codebase uses `render`, not `asChild`.
+
 **Theme:** Red/white/black, set entirely via CSS custom properties in `app/globals.css` (`--primary`, `--destructive`, etc.) — `--destructive` is intentionally a different red (darker/desaturated) from `--primary` so error/delete states stay visually distinct from primary actions. Don't hardcode colors elsewhere; everything should consume the CSS variables via Tailwind's semantic classes.
 
 ## Environment
