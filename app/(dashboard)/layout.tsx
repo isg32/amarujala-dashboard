@@ -40,6 +40,9 @@ export default async function DashboardLayout({
           <Link href="/readers" className="text-muted-foreground hover:text-foreground">
             Readers
           </Link>
+          <Link href="/attendance" className="text-muted-foreground hover:text-foreground">
+            Attendance
+          </Link>
           {user.role === "admin" &&
             MASTER_DATA_LINKS.map((link) => (
               <Link key={link.href} href={link.href} className="text-muted-foreground hover:text-foreground">

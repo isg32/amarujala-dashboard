@@ -1,5 +1,6 @@
 import { notFound } from "next/navigation";
 import { getReader } from "@/lib/data/readers";
+import { listAttendanceForReader } from "@/lib/data/attendance";
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 
@@ -11,6 +12,13 @@ export default async function ReaderProfilePage({
   const { id } = await params;
   const reader = await getReader(Number(id));
   if (!reader) notFound();
+
+  const attendanceRows = await listAttendanceForReader(reader.id);
+  const currentMonthPrefix = new Date().toISOString().slice(0, 7);
+  const thisMonth = attendanceRows.filter((a) => a.attendanceDate.startsWith(currentMonthPrefix));
+  const deliveredCount = thisMonth.filter((a) => a.status === "delivered").length;
+  const absentCount = thisMonth.filter((a) => a.status === "not_delivered").length;
+  const recentRows = [...attendanceRows].reverse().slice(0, 14);
 
   return (
     <div className="flex flex-col gap-6 max-w-2xl">
@@ -51,6 +59,28 @@ export default async function ReaderProfilePage({
             <div className="text-muted-foreground">Outstanding Balance</div>
             <div>₹{reader.outstandingBalance}</div>
           </div>
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>Attendance</CardTitle>
+          <p className="text-sm text-muted-foreground">
+            This month: {deliveredCount} delivered, {absentCount} absent
+          </p>
+        </CardHeader>
+        <CardContent>
+          {recentRows.length === 0 ? (
+            <p className="text-sm text-muted-foreground">No attendance marked yet.</p>
+          ) : (
+            <div className="flex flex-wrap gap-1.5">
+              {recentRows.map((a) => (
+                <Badge key={a.attendanceDate} variant={a.status === "delivered" ? "secondary" : "outline"}>
+                  {a.attendanceDate}: {a.status === "delivered" ? "Delivered" : "Absent"}
+                </Badge>
+              ))}
+            </div>
+          )}
         </CardContent>
       </Card>
     </div>

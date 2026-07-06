@@ -1,0 +1,133 @@
+"use client";
+
+import { useActionState, useState } from "react";
+import { markAttendanceAction, type AttendanceActionState } from "./actions";
+import { Field, FieldLabel, FieldGroup } from "@/components/ui/field";
+import { Input } from "@/components/ui/input";
+import { Button } from "@/components/ui/button";
+import { Alert, AlertTitle, AlertDescription } from "@/components/ui/alert";
+import {
+  Select,
+  SelectTrigger,
+  SelectValue,
+  SelectContent,
+  SelectItem,
+  SelectGroup,
+} from "@/components/ui/select";
+
+type Option = { id: number; label: string };
+
+const initialState: AttendanceActionState = null;
+
+export function AttendanceForm({
+  isAdmin,
+  readerOptions,
+  centerOptions,
+  cityOptions,
+  unitOptions,
+}: {
+  isAdmin: boolean;
+  readerOptions: Option[];
+  centerOptions: Option[];
+  cityOptions: Option[];
+  unitOptions: Option[];
+}) {
+  const [state, formAction, pending] = useActionState(markAttendanceAction, initialState);
+  const [scope, setScope] = useState<string>("reader");
+
+  const scopeOptions = isAdmin
+    ? [
+        { value: "reader", label: "Individual Reader" },
+        { value: "center", label: "Center" },
+        { value: "city", label: "City" },
+        { value: "unit", label: "Unit" },
+        { value: "org", label: "Entire Organization" },
+      ]
+    : [{ value: "reader", label: "Individual Reader" }];
+
+  const targetOptions: Option[] =
+    scope === "reader" ? readerOptions : scope === "center" ? centerOptions : scope === "city" ? cityOptions : scope === "unit" ? unitOptions : [];
+
+  return (
+    <form action={formAction} className="flex flex-col gap-3 max-w-md">
+      <FieldGroup>
+        <Field>
+          <FieldLabel htmlFor="scope">Scope</FieldLabel>
+          <Select name="scope" value={scope} onValueChange={(v) => setScope(typeof v === "string" ? v : "reader")}>
+            <SelectTrigger id="scope" className="w-full">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectGroup>
+                {scopeOptions.map((o) => (
+                  <SelectItem key={o.value} value={o.value}>
+                    {o.label}
+                  </SelectItem>
+                ))}
+              </SelectGroup>
+            </SelectContent>
+          </Select>
+        </Field>
+
+        {scope !== "org" && (
+          <Field>
+            <FieldLabel htmlFor="scopeId">{scope === "reader" ? "Reader" : "Target"}</FieldLabel>
+            <Select name={scope === "reader" ? "readerId" : "scopeId"} required>
+              <SelectTrigger id="scopeId" className="w-full">
+                <SelectValue placeholder={`Select a ${scope}`} />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectGroup>
+                  {targetOptions.map((o) => (
+                    <SelectItem key={o.id} value={String(o.id)}>
+                      {o.label}
+                    </SelectItem>
+                  ))}
+                </SelectGroup>
+              </SelectContent>
+            </Select>
+          </Field>
+        )}
+
+        <Field>
+          <FieldLabel htmlFor="dateFrom">Date from</FieldLabel>
+          <Input id="dateFrom" name="dateFrom" type="date" required />
+        </Field>
+        <Field>
+          <FieldLabel htmlFor="dateTo">Date to (optional, defaults to same day)</FieldLabel>
+          <Input id="dateTo" name="dateTo" type="date" />
+        </Field>
+        <Field>
+          <FieldLabel htmlFor="status">Status</FieldLabel>
+          <Select name="status" defaultValue="delivered">
+            <SelectTrigger id="status" className="w-full">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectGroup>
+                <SelectItem value="delivered">Delivered</SelectItem>
+                <SelectItem value="not_delivered">Not Delivered (Absent)</SelectItem>
+              </SelectGroup>
+            </SelectContent>
+          </Select>
+        </Field>
+      </FieldGroup>
+      <Button type="submit" disabled={pending} className="self-start">
+        {pending ? "Marking..." : "Mark Attendance"}
+      </Button>
+
+      {state && "message" in state && (
+        <Alert>
+          <AlertTitle>Done</AlertTitle>
+          <AlertDescription>{state.message}</AlertDescription>
+        </Alert>
+      )}
+      {state && "error" in state && (
+        <Alert variant="destructive">
+          <AlertTitle>Failed</AlertTitle>
+          <AlertDescription>{state.error}</AlertDescription>
+        </Alert>
+      )}
+    </form>
+  );
+}
