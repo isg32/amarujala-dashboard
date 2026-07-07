@@ -31,6 +31,9 @@ export default async function DashboardLayout({
             </Link>
           </SignedOut>
           <SignedIn>
+            <Link href="/account/settings" className="text-sm text-muted-foreground hover:text-foreground">
+              Settings
+            </Link>
             <UserButton />
           </SignedIn>
         </div>

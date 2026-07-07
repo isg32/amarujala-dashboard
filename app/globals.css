@@ -50,48 +50,85 @@
 }
 
 :root {
-  --background: oklch(1 0 0);
-  --foreground: oklch(0.145 0 0);
-  --card: oklch(1 0 0);
-  --card-foreground: oklch(0.145 0 0);
-  --popover: oklch(1 0 0);
-  --popover-foreground: oklch(0.145 0 0);
-  /* Brand: red/white/black. --primary is the brand red; --destructive is a
-     darker, more desaturated red so error/delete states stay visually
-     distinct from primary actions. Everything else stays achromatic. */
-  --primary: oklch(0.55 0.22 29);
-  --primary-foreground: oklch(0.985 0 0);
-  --secondary: oklch(0.97 0 0);
-  --secondary-foreground: oklch(0.205 0 0);
-  --muted: oklch(0.97 0 0);
-  --muted-foreground: oklch(0.556 0 0);
-  --accent: oklch(0.97 0 0);
-  --accent-foreground: oklch(0.205 0 0);
-  --destructive: oklch(0.45 0.19 25);
-  --border: oklch(0.922 0 0);
-  --input: oklch(0.922 0 0);
-  --ring: oklch(0.65 0.2 29);
+  /* Brand tokens sourced from DESIGN.md (getdesign vodafone template),
+     adapted for an internal admin dashboard rather than a marketing site:
+     same color system, 6px card/input radius, pill-shaped buttons/badges —
+     but no hero bands, no 144px display type, no editorial photography,
+     since those are marketing-site conventions with no analog here. */
+  --background: #ffffff; /* canvas */
+  --foreground: #25282b; /* ink */
+  --card: #ffffff;
+  --card-foreground: #25282b;
+  --popover: #ffffff;
+  --popover-foreground: #25282b;
+  /* --primary is the brand red; --destructive is a darker, more desaturated
+     red so error/delete states stay visually distinct from primary actions. */
+  --primary: #e60000;
+  --primary-foreground: #ffffff;
+  --secondary: #f2f2f2; /* canvas-soft */
+  --secondary-foreground: #25282b;
+  --muted: #f2f2f2;
+  --muted-foreground: #7e7e7e; /* body */
+  --accent: #f2f2f2;
+  --accent-foreground: #25282b;
+  --destructive: #b30000;
+  --border: #bebebe; /* mute */
+  --input: #bebebe;
+  --ring: #e60000;
   --chart-1: oklch(0.87 0 0);
   --chart-2: oklch(0.556 0 0);
   --chart-3: oklch(0.439 0 0);
   --chart-4: oklch(0.371 0 0);
   --chart-5: oklch(0.269 0 0);
-  --radius: 0.625rem;
-  --sidebar: oklch(0.985 0 0);
-  --sidebar-foreground: oklch(0.145 0 0);
-  --sidebar-primary: oklch(0.55 0.22 29);
-  --sidebar-primary-foreground: oklch(0.985 0 0);
-  --sidebar-accent: oklch(0.97 0 0);
-  --sidebar-accent-foreground: oklch(0.205 0 0);
-  --sidebar-border: oklch(0.922 0 0);
-  --sidebar-ring: oklch(0.65 0.2 29);
+  --radius: 0.375rem; /* 6px — DESIGN.md's card/input radius */
+  --sidebar: #ffffff;
+  --sidebar-foreground: #25282b;
+  --sidebar-primary: #e60000;
+  --sidebar-primary-foreground: #ffffff;
+  --sidebar-accent: #f2f2f2;
+  --sidebar-accent-foreground: #25282b;
+  --sidebar-border: #bebebe;
+  --sidebar-ring: #e60000;
 }
 
-/* No dark-mode variant: this app is a single fixed red/white/black theme,
-   not one that should follow OS/browser dark-mode preference. The auth UI
-   package auto-toggles a `.dark` class on <html> based on system
-   preference; deliberately not defining a `.dark {}` override here means
-   that toggle has no visual effect and :root's light values always win. */
+/* Auto dark mode: the auth UI package already toggles a `.dark` class on
+   <html> based on the browser/OS color-scheme preference (no wiring needed
+   on our side) — this block gives that class real values instead of the
+   generic shadcn defaults, staying on-brand (same red, ink-based dark
+   surface rather than pure black). */
+.dark {
+  --background: #1a1c1e; /* darker than ink for depth vs. card surfaces */
+  --foreground: #ffffff;
+  --card: #25282b; /* ink */
+  --card-foreground: #ffffff;
+  --popover: #25282b;
+  --popover-foreground: #ffffff;
+  --primary: #ff1a1a; /* brightened red for contrast on dark surfaces */
+  --primary-foreground: #ffffff;
+  --secondary: #313538;
+  --secondary-foreground: #ffffff;
+  --muted: #313538;
+  --muted-foreground: #a3a3a3;
+  --accent: #313538;
+  --accent-foreground: #ffffff;
+  --destructive: #ff4d4d;
+  --border: #3d4144;
+  --input: #3d4144;
+  --ring: #ff1a1a;
+  --chart-1: oklch(0.87 0 0);
+  --chart-2: oklch(0.556 0 0);
+  --chart-3: oklch(0.439 0 0);
+  --chart-4: oklch(0.371 0 0);
+  --chart-5: oklch(0.269 0 0);
+  --sidebar: #1a1c1e;
+  --sidebar-foreground: #ffffff;
+  --sidebar-primary: #ff1a1a;
+  --sidebar-primary-foreground: #ffffff;
+  --sidebar-accent: #313538;
+  --sidebar-accent-foreground: #ffffff;
+  --sidebar-border: #3d4144;
+  --sidebar-ring: #ff1a1a;
+}
 
 @layer base {
   * {
