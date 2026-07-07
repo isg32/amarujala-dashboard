@@ -9,6 +9,7 @@ import {
   createCenter,
   setCityPrice,
   createPoc,
+  createAdmin,
 } from "@/lib/data/master-data";
 
 const nameSchema = z.string().trim().min(1, "Name is required");
@@ -68,5 +69,20 @@ export async function createPocAction(
     return { tempPassword };
   } catch (e) {
     return { error: e instanceof Error ? e.message : "Failed to create POC" };
+  }
+}
+
+export async function createAdminAction(
+  formData: FormData
+): Promise<{ tempPassword: string } | { error: string }> {
+  const name = nameSchema.parse(formData.get("name"));
+  const email = z.email().parse(formData.get("email"));
+
+  try {
+    const { tempPassword } = await createAdmin({ name, email });
+    revalidatePath("/master-data/pocs");
+    return { tempPassword };
+  } catch (e) {
+    return { error: e instanceof Error ? e.message : "Failed to create admin" };
   }
 }

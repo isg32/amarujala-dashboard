@@ -115,34 +115,48 @@ export async function listPocs() {
   }));
 }
 
-// Creates the AU POC's Neon Auth login (requires the caller to already hold
-// Neon Auth's own admin role — see CLAUDE.md for the one-time bootstrap this
-// depends on) plus our app_users/poc_centers rows, in that order. Returns a
-// one-time temporary password the Administrator must relay to the POC.
+// Shared by createPoc/createAdmin: creates the Neon Auth login (requires the
+// caller to already hold Neon Auth's own admin role — see CLAUDE.md for the
+// one-time bootstrap this depends on). Returns a one-time temporary password
+// the Administrator must relay to the new user.
+async function createAppUserLogin(name: string, email: string) {
+  const tempPassword = randomBytes(9).toString("base64url");
+  const { data, error } = await auth.admin.createUser({ email, name, password: tempPassword });
+  if (error || !data?.user) {
+    throw new Error(error?.message ?? "Failed to create login");
+  }
+  return { id: data.user.id, tempPassword };
+}
+
 export async function createPoc(input: { name: string; email: string; centerIds: number[] }) {
   await requireAdmin();
 
-  const tempPassword = randomBytes(9).toString("base64url");
-  const { data, error } = await auth.admin.createUser({
-    email: input.email,
-    name: input.name,
-    password: tempPassword,
-  });
-  if (error || !data?.user) {
-    throw new Error(error?.message ?? "Failed to create POC login");
-  }
-
-  await db.insert(appUsers).values({
-    id: data.user.id,
-    name: input.name,
-    email: input.email,
-    role: "au_poc",
-  });
+  const { id, tempPassword } = await createAppUserLogin(input.name, input.email);
+  await db.insert(appUsers).values({ id, name: input.name, email: input.email, role: "au_poc" });
   if (input.centerIds.length > 0) {
-    await db
-      .insert(pocCenters)
-      .values(input.centerIds.map((centerId) => ({ pocUserId: data.user.id, centerId })));
+    await db.insert(pocCenters).values(input.centerIds.map((centerId) => ({ pocUserId: id, centerId })));
   }
 
-  return { id: data.user.id, tempPassword };
+  return { id, tempPassword };
+}
+
+export async function listAdmins() {
+  await requireAdmin();
+  return db
+    .select({ id: appUsers.id, name: appUsers.name, email: appUsers.email })
+    .from(appUsers)
+    .where(eq(appUsers.role, "admin"))
+    .orderBy(asc(appUsers.name));
+}
+
+// Any existing Administrator can create another — same Neon Auth admin-role
+// requirement as createPoc, no centers involved since admins aren't
+// center-scoped.
+export async function createAdmin(input: { name: string; email: string }) {
+  await requireAdmin();
+
+  const { id, tempPassword } = await createAppUserLogin(input.name, input.email);
+  await db.insert(appUsers).values({ id, name: input.name, email: input.email, role: "admin" });
+
+  return { id, tempPassword };
 }

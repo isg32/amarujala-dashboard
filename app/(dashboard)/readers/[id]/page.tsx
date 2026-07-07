@@ -10,6 +10,7 @@ import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { RecordPaymentForm } from "../../payments/record-payment-form";
+import { ReversePaymentButton } from "../../payments/reverse-payment-button";
 import { ApplyCouponForm } from "../../coupons/apply-coupon-form";
 import { sendPaymentReminderAction } from "./reminder-actions";
 
@@ -171,13 +172,17 @@ export default async function ReaderProfilePage({
               {paymentRows.map((p) => (
                 <div key={p.id} className="flex items-center justify-between border-b pb-1.5 last:border-0">
                   <div>
-                    <div>{p.paymentDate}</div>
+                    <div className={p.reversed ? "text-muted-foreground line-through" : ""}>{p.paymentDate}</div>
                     <div className="text-xs text-muted-foreground">
                       {METHOD_LABELS[p.method] ?? p.method}
                       {p.transactionReference ? ` — Ref: ${p.transactionReference}` : ""}
                     </div>
                   </div>
-                  <div>₹{p.amount}</div>
+                  <div className="flex items-center gap-3">
+                    <div className={p.reversed ? "text-muted-foreground line-through" : ""}>₹{p.amount}</div>
+                    {isAdmin && !p.reversed && <ReversePaymentButton paymentId={p.id} />}
+                    {p.reversed && <span className="text-xs text-muted-foreground">Reversed</span>}
+                  </div>
                 </div>
               ))}
             </div>

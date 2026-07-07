@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import Image from "next/image";
 import { usePathname } from "next/navigation";
 import {
   LayoutDashboard,
@@ -53,7 +54,17 @@ const MASTER_DATA_LINKS = [
   { href: "/master-data/pricing", label: "Pricing", icon: Tag },
 ];
 
-function NavLink({ href, label, icon: Icon, active }: { href: string; label: string; icon: typeof LayoutDashboard; active: boolean }) {
+function NavLink({
+  href,
+  label,
+  icon: Icon,
+  active,
+}: {
+  href: string;
+  label: string;
+  icon: typeof LayoutDashboard;
+  active: boolean;
+}) {
   return (
     <SidebarMenuItem>
       <SidebarMenuButton isActive={active} render={<Link href={href} />}>
@@ -74,16 +85,23 @@ export function AppSidebar({
   userEmail: string;
 }) {
   const pathname = usePathname();
-  const isActive = (href: string) => (href === "/dashboard" ? pathname === href : pathname.startsWith(href));
+  const isActive = (href: string) =>
+    href === "/dashboard" ? pathname === href : pathname.startsWith(href);
 
   return (
     <Sidebar collapsible="offcanvas">
       <SidebarHeader className="px-3 py-4">
-        <Link href="/dashboard" className="flex items-center gap-2 px-1 font-semibold text-sidebar-foreground">
-          <span className="flex size-7 items-center justify-center rounded-md bg-sidebar-primary text-sm font-bold text-sidebar-primary-foreground">
-            R
-          </span>
-          <span>Reader Dashboard</span>
+        <Link
+          href="/dashboard"
+          className="flex items-center gap-2 px-1 font-semibold text-sidebar-foreground"
+        >
+          <Image
+            src="/amar-ujala-logo.png"
+            alt="Amar Ujala"
+            width={160}
+            height={26}
+            priority
+          />
         </Link>
       </SidebarHeader>
       <SidebarContent>
@@ -91,7 +109,11 @@ export function AppSidebar({
           <SidebarGroupContent>
             <SidebarMenu>
               {MAIN_LINKS.map((link) => (
-                <NavLink key={link.href} {...link} active={isActive(link.href)} />
+                <NavLink
+                  key={link.href}
+                  {...link}
+                  active={isActive(link.href)}
+                />
               ))}
             </SidebarMenu>
           </SidebarGroupContent>
@@ -103,7 +125,11 @@ export function AppSidebar({
             <SidebarGroupContent>
               <SidebarMenu>
                 {ADMIN_LINKS.map((link) => (
-                  <NavLink key={link.href} {...link} active={isActive(link.href)} />
+                  <NavLink
+                    key={link.href}
+                    {...link}
+                    active={isActive(link.href)}
+                  />
                 ))}
               </SidebarMenu>
             </SidebarGroupContent>
@@ -116,20 +142,28 @@ export function AppSidebar({
             <SidebarGroupContent>
               <SidebarMenu>
                 {MASTER_DATA_LINKS.map((link) => (
-                  <NavLink key={link.href} {...link} active={isActive(link.href)} />
+                  <NavLink
+                    key={link.href}
+                    {...link}
+                    active={isActive(link.href)}
+                  />
                 ))}
               </SidebarMenu>
             </SidebarGroupContent>
           </SidebarGroup>
         )}
       </SidebarContent>
-      <SidebarFooter className="gap-3 border-t border-sidebar-border p-3">
+      <SidebarFooter className="gap-3 border-t border-sidebar-border p-3 pb-12">
         <div className="flex items-center justify-between gap-2 rounded-md bg-sidebar-accent p-2">
-          <div className="min-w-0">
-            <p className="truncate text-sm font-medium text-sidebar-accent-foreground">{userName}</p>
-            <p className="truncate text-xs text-sidebar-foreground/70">{userEmail}</p>
+          <div className="min-w-0 max-w-sm">
+            <p className="truncate text-sm font-medium text-sidebar-accent-foreground">
+              {userName}
+            </p>
+            <p className="truncate text-xs text-sidebar-foreground/70 overflow-x-hidden text-ellipsis">
+              {userEmail}
+            </p>
           </div>
-          <UserButton />
+          <UserButton size="icon" />
         </div>
         <Link
           href="/account/settings"

@@ -2,7 +2,7 @@
 
 import { z } from "zod";
 import { revalidatePath } from "next/cache";
-import { recordPayment } from "@/lib/data/payments";
+import { recordPayment, reversePayment } from "@/lib/data/payments";
 
 const methodSchema = z.enum(["cash", "upi", "bank_transfer", "razorpay", "other"]);
 
@@ -30,5 +30,18 @@ export async function recordPaymentAction(
     return { message: `Recorded payment of ₹${amount.toFixed(2)}.` };
   } catch (e) {
     return { error: e instanceof Error ? e.message : "Failed to record payment." };
+  }
+}
+
+export async function reversePaymentAction(
+  paymentId: number,
+  reason?: string
+): Promise<{ error: string } | undefined> {
+  try {
+    await reversePayment(paymentId, reason);
+    revalidatePath("/payments");
+    revalidatePath("/readers", "layout");
+  } catch (e) {
+    return { error: e instanceof Error ? e.message : "Failed to reverse payment." };
   }
 }
