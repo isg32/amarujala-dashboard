@@ -43,6 +43,17 @@ export default async function DashboardLayout({
           <Link href="/attendance" className="text-muted-foreground hover:text-foreground">
             Attendance
           </Link>
+          <Link href="/payments" className="text-muted-foreground hover:text-foreground">
+            Payments
+          </Link>
+          <Link href="/reports" className="text-muted-foreground hover:text-foreground">
+            Reports
+          </Link>
+          {user.role === "admin" && (
+            <Link href="/coupons" className="text-muted-foreground hover:text-foreground">
+              Coupons
+            </Link>
+          )}
           {user.role === "admin" && (
             <Link href="/billing" className="text-muted-foreground hover:text-foreground">
               Billing

@@ -1,8 +1,9 @@
 import "server-only";
+import { alias } from "drizzle-orm/pg-core";
 import { and, asc, desc, eq, gte, ilike, inArray, or, sql } from "drizzle-orm";
-import { requireAppUser, type AppUser } from "@/lib/auth/session";
+import { requireAdmin, requireAppUser, type AppUser } from "@/lib/auth/session";
 import { db } from "@/lib/db";
-import { readers, centers, cities, units, zones, appUsers, pocCenters } from "@/lib/db/schema";
+import { readers, centers, cities, units, zones, appUsers, pocCenters, readerTransfers } from "@/lib/db/schema";
 import type { ReaderInput } from "@/lib/validation/reader";
 import type { ParsedReaderRow } from "@/lib/bulk-upload/parse-readers";
 
@@ -248,4 +249,51 @@ export async function bulkCreateReaders(parsedRows: ParsedReaderRow[]): Promise<
 
   errors.sort((a, b) => a.row - b.row);
   return { insertedCount, errors };
+}
+
+// Admin-only per the FRD ("Administrators should be able to transfer the
+// reader"). Updates readers.center_id and logs the move — all history keyed
+// off reader_id (attendance/payments/coupons/ledger) is untouched, only the
+// current operational assignment changes.
+export async function transferReader(readerId: number, toCenterId: number, remarks?: string) {
+  const user = await requireAdmin();
+
+  const [reader] = await db.select({ centerId: readers.centerId }).from(readers).where(eq(readers.id, readerId));
+  if (!reader) throw new Error("Reader not found.");
+  if (reader.centerId === toCenterId) throw new Error("Reader is already assigned to this Center.");
+
+  await db.transaction(async (tx) => {
+    await tx.insert(readerTransfers).values({
+      readerId,
+      fromCenterId: reader.centerId,
+      toCenterId,
+      transferredBy: user.id,
+      remarks,
+    });
+    await tx.update(readers).set({ centerId: toCenterId }).where(eq(readers.id, readerId));
+  });
+}
+
+export async function listTransfersForReader(readerId: number) {
+  const user = await requireAppUser();
+  const [reader] = await db.select({ centerId: readers.centerId }).from(readers).where(eq(readers.id, readerId));
+  if (!reader) throw new Error("Reader not found.");
+  assertCenterInScope(user, reader.centerId);
+
+  const fromCenters = alias(centers, "from_centers");
+  const toCenters = alias(centers, "to_centers");
+
+  return db
+    .select({
+      id: readerTransfers.id,
+      fromCenterName: fromCenters.name,
+      toCenterName: toCenters.name,
+      transferredAt: readerTransfers.transferredAt,
+      remarks: readerTransfers.remarks,
+    })
+    .from(readerTransfers)
+    .innerJoin(fromCenters, eq(readerTransfers.fromCenterId, fromCenters.id))
+    .innerJoin(toCenters, eq(readerTransfers.toCenterId, toCenters.id))
+    .where(eq(readerTransfers.readerId, readerId))
+    .orderBy(desc(readerTransfers.transferredAt));
 }

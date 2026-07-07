@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { getCurrentAppUser } from "@/lib/auth/session";
 import { listReaders, listAssignableCentersWithPocs } from "@/lib/data/readers";
 import { Card, CardContent } from "@/components/ui/card";
 import { Table, TableHeader, TableRow, TableHead, TableBody, TableCell } from "@/components/ui/table";
@@ -23,7 +24,7 @@ export default async function ReadersPage({
   const centerId = params.centerId ? Number(params.centerId) : undefined;
   const status = params.status === "active" || params.status === "inactive" ? params.status : undefined;
 
-  const [readerRows, centers] = await Promise.all([
+  const [readerRows, centers, currentUser] = await Promise.all([
     listReaders({
       search: params.search || undefined,
       status,
@@ -31,13 +32,24 @@ export default async function ReadersPage({
       newlyAdded: params.newlyAdded === "true",
     }),
     listAssignableCentersWithPocs(),
+    getCurrentAppUser(),
   ]);
+
+  const exportQuery = new URLSearchParams();
+  if (params.search) exportQuery.set("search", params.search);
+  if (params.status) exportQuery.set("status", params.status);
+  if (params.centerId) exportQuery.set("centerId", params.centerId);
 
   return (
     <div className="flex flex-col gap-6">
       <div className="flex items-center justify-between">
         <h1 className="text-lg font-semibold">Reader Directory</h1>
         <div className="flex gap-2">
+          {currentUser?.role === "admin" && (
+            <Button variant="outline" render={<a href={`/api/export/readers?${exportQuery}`} />} nativeButton={false}>
+              Export
+            </Button>
+          )}
           <Button variant="outline" render={<Link href="/readers/bulk-upload" />} nativeButton={false}>
             Bulk Upload
           </Button>
