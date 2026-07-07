@@ -8,6 +8,7 @@
     "start": "next start",
     "lint": "eslint",
     "db:seed": "tsx scripts/seed.ts",
+    "db:seed-mock": "tsx scripts/seed-mock-data.ts",
     "test:billing": "node --import tsx --test lib/billing/calculate.test.ts",
     "db:reconcile-ledger": "tsx scripts/reconcile-ledger.ts"
   },
