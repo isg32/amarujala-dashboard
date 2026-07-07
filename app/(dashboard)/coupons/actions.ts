@@ -2,7 +2,7 @@
 
 import { z } from "zod";
 import { revalidatePath } from "next/cache";
-import { createCoupon, applyCoupon } from "@/lib/data/coupons";
+import { createCoupon, deleteCoupon, applyCoupon } from "@/lib/data/coupons";
 
 export async function createCouponAction(formData: FormData) {
   const code = z.string().trim().min(1).parse(formData.get("code"));
@@ -10,6 +10,15 @@ export async function createCouponAction(formData: FormData) {
   const discountAmount = z.coerce.number().positive().parse(formData.get("discountAmount"));
   await createCoupon(code, description, discountAmount);
   revalidatePath("/coupons");
+}
+
+export async function deleteCouponAction(id: number): Promise<{ error: string } | void> {
+  try {
+    await deleteCoupon(id);
+    revalidatePath("/coupons");
+  } catch (e) {
+    return { error: e instanceof Error ? e.message : "Failed to delete coupon" };
+  }
 }
 
 export type ApplyCouponState = { message: string } | { error: string } | null;

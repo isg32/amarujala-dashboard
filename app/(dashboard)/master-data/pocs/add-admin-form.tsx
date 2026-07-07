@@ -7,7 +7,7 @@ import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Alert, AlertTitle, AlertDescription } from "@/components/ui/alert";
 
-const initialState: { tempPassword: string } | { error: string } | null = null;
+const initialState: { tempPassword?: string } | { error: string } | null = null;
 
 export function AddAdminForm() {
   const [state, formAction, pending] = useActionState(
@@ -27,6 +27,10 @@ export function AddAdminForm() {
             <FieldLabel htmlFor="admin-email">Email</FieldLabel>
             <Input id="admin-email" name="email" type="email" required />
           </Field>
+          <Field>
+            <FieldLabel htmlFor="admin-password">Password (optional)</FieldLabel>
+            <Input id="admin-password" name="password" type="password" minLength={8} />
+          </Field>
         </FieldGroup>
         <Button type="submit" disabled={pending}>
           {pending ? "Creating..." : "Create Admin"}
@@ -37,8 +41,14 @@ export function AddAdminForm() {
         <Alert>
           <AlertTitle>Administrator account created</AlertTitle>
           <AlertDescription>
-            Temporary password (shown once, share with them securely):{" "}
-            <code className="font-mono">{state.tempPassword}</code>
+            {state.tempPassword ? (
+              <>
+                Temporary password (shown once, share with them securely):{" "}
+                <code className="font-mono">{state.tempPassword}</code>
+              </>
+            ) : (
+              "They can sign in with the password you set."
+            )}
           </AlertDescription>
         </Alert>
       )}

@@ -32,7 +32,13 @@ export const paymentMethodEnum = pgEnum("payment_method", [
   "upi",
   "bank_transfer",
   "razorpay",
+  "payu",
   "other",
+]);
+export const paymentIntentStatusEnum = pgEnum("payment_intent_status", [
+  "pending",
+  "success",
+  "failed",
 ]);
 export const ledgerEntryTypeEnum = pgEnum("ledger_entry_type", [
   "monthly_charge",
@@ -205,6 +211,24 @@ export const payments = pgTable("payments", {
     .references(() => appUsers.id),
   reversed: boolean("reversed").notNull().default(false),
   createdAt: timestamp("created_at").notNull().defaultNow(),
+});
+
+// A PayU payment link generated for a reader. Public/unauthenticated
+// routes (app/pay/*, the PayU webhook) key off txnId, never the reader's
+// internal id directly, so a leaked link only exposes this one intent.
+export const paymentIntents = pgTable("payment_intents", {
+  id: serial("id").primaryKey(),
+  readerId: integer("reader_id")
+    .notNull()
+    .references(() => readers.id),
+  txnId: text("txn_id").notNull().unique(),
+  amount: numeric("amount", { precision: 10, scale: 2 }).notNull(),
+  status: paymentIntentStatusEnum("status").notNull().default("pending"),
+  createdBy: text("created_by")
+    .notNull()
+    .references(() => appUsers.id),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+  paidAt: timestamp("paid_at"),
 });
 
 export const coupons = pgTable("coupons", {

@@ -1,13 +1,15 @@
 import { requireAdmin } from "@/lib/auth/session";
 import { listPocs, listCenters, listAdmins } from "@/lib/data/master-data";
+import { deletePocAction, deleteAdminAction } from "../actions";
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
 import { Table, TableHeader, TableRow, TableHead, TableBody, TableCell } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import { PocForm } from "./poc-form";
 import { AddAdminForm } from "./add-admin-form";
+import { DeleteButton } from "../delete-button";
 
 export default async function PocsPage() {
-  await requireAdmin();
+  const currentUser = await requireAdmin();
   const [pocs, centers, admins] = await Promise.all([listPocs(), listCenters(), listAdmins()]);
 
   return (
@@ -36,6 +38,7 @@ export default async function PocsPage() {
                 <TableHead>Name</TableHead>
                 <TableHead>Email</TableHead>
                 <TableHead>Centers</TableHead>
+                <TableHead className="text-right">Actions</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -49,6 +52,12 @@ export default async function PocsPage() {
                         {c.name}
                       </Badge>
                     ))}
+                  </TableCell>
+                  <TableCell className="text-right">
+                    <DeleteButton
+                      action={deletePocAction.bind(null, poc.id)}
+                      confirmMessage={`Delete POC "${poc.name}"? This also removes their login.`}
+                    />
                   </TableCell>
                 </TableRow>
               ))}
@@ -76,6 +85,7 @@ export default async function PocsPage() {
               <TableRow>
                 <TableHead>Name</TableHead>
                 <TableHead>Email</TableHead>
+                <TableHead className="text-right">Actions</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -83,6 +93,16 @@ export default async function PocsPage() {
                 <TableRow key={admin.id}>
                   <TableCell>{admin.name}</TableCell>
                   <TableCell>{admin.email}</TableCell>
+                  <TableCell className="text-right">
+                    {admin.id === currentUser.id ? (
+                      <span className="text-xs text-muted-foreground">You</span>
+                    ) : (
+                      <DeleteButton
+                        action={deleteAdminAction.bind(null, admin.id)}
+                        confirmMessage={`Delete administrator "${admin.name}"? This also removes their login.`}
+                      />
+                    )}
+                  </TableCell>
                 </TableRow>
               ))}
             </TableBody>

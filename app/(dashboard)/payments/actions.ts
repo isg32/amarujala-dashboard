@@ -2,7 +2,9 @@
 
 import { z } from "zod";
 import { revalidatePath } from "next/cache";
-import { recordPayment, reversePayment } from "@/lib/data/payments";
+import { headers } from "next/headers";
+import { recordPayment, reversePayment, createPaymentLink } from "@/lib/data/payments";
+import { sendPaymentLinkSms } from "@/lib/sms/send-reminder";
 
 const methodSchema = z.enum(["cash", "upi", "bank_transfer", "razorpay", "other"]);
 
@@ -30,6 +32,20 @@ export async function recordPaymentAction(
     return { message: `Recorded payment of ₹${amount.toFixed(2)}.` };
   } catch (e) {
     return { error: e instanceof Error ? e.message : "Failed to record payment." };
+  }
+}
+
+// Admin-only (createPaymentLink enforces this via requireAdmin). Generates
+// the PayU link and sends it to the reader by SMS in one step.
+export async function sendPaymentLinkAction(readerId: number): Promise<{ error: string } | { message: string }> {
+  try {
+    const { txnId, reader } = await createPaymentLink(readerId);
+    const origin = (await headers()).get("origin") ?? `https://${(await headers()).get("host")}`;
+    const payUrl = `${origin}/pay?id=${txnId}`;
+    await sendPaymentLinkSms(reader, payUrl);
+    return { message: "Payment link sent by SMS." };
+  } catch (e) {
+    return { error: e instanceof Error ? e.message : "Failed to send payment link." };
   }
 }
 

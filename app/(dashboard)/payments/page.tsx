@@ -20,6 +20,7 @@ const METHOD_LABELS: Record<string, string> = {
   upi: "UPI",
   bank_transfer: "Bank Transfer",
   razorpay: "Razorpay",
+  payu: "PayU",
   other: "Other",
 };
 
@@ -30,7 +31,7 @@ export default async function PaymentsPage({
 }) {
   const params = await searchParams;
   const centerId = params.centerId ? Number(params.centerId) : undefined;
-  const method = (["cash", "upi", "bank_transfer", "razorpay", "other"] as const).includes(
+  const method = (["cash", "upi", "bank_transfer", "razorpay", "payu", "other"] as const).includes(
     params.method as PaymentMethod
   )
     ? (params.method as PaymentMethod)

@@ -10,7 +10,7 @@ import { Alert, AlertTitle, AlertDescription } from "@/components/ui/alert";
 
 type Center = { id: number; name: string; cityName: string };
 
-const initialState: { tempPassword: string } | { error: string } | null = null;
+const initialState: { tempPassword?: string } | { error: string } | null = null;
 
 export function PocForm({ centers }: { centers: Center[] }) {
   const [state, formAction, pending] = useActionState(
@@ -29,6 +29,11 @@ export function PocForm({ centers }: { centers: Center[] }) {
           <Field>
             <FieldLabel htmlFor="email">Email</FieldLabel>
             <Input id="email" name="email" type="email" required />
+          </Field>
+          <Field>
+            <FieldLabel htmlFor="password">Password (optional)</FieldLabel>
+            <Input id="password" name="password" type="password" minLength={8} />
+            <p className="text-xs text-muted-foreground">Leave blank to auto-generate one.</p>
           </Field>
           <Field>
             <FieldLabel>Assigned Centers</FieldLabel>
@@ -51,8 +56,14 @@ export function PocForm({ centers }: { centers: Center[] }) {
         <Alert>
           <AlertTitle>POC account created</AlertTitle>
           <AlertDescription>
-            Temporary password (shown once, share with the POC):{" "}
-            <code className="font-mono">{state.tempPassword}</code>
+            {state.tempPassword ? (
+              <>
+                Temporary password (shown once, share with the POC):{" "}
+                <code className="font-mono">{state.tempPassword}</code>
+              </>
+            ) : (
+              "The POC can sign in with the password you set."
+            )}
           </AlertDescription>
         </Alert>
       )}

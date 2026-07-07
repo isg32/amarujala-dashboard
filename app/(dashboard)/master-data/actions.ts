@@ -4,20 +4,44 @@ import { z } from "zod";
 import { revalidatePath } from "next/cache";
 import {
   createZone,
+  deleteZone,
   createUnit,
+  deleteUnit,
   createCity,
+  deleteCity,
   createCenter,
+  deleteCenter,
   setCityPrice,
+  deleteCityPricing,
   createPoc,
+  deletePoc,
   createAdmin,
+  deleteAdmin,
 } from "@/lib/data/master-data";
 
 const nameSchema = z.string().trim().min(1, "Name is required");
+
+type ActionResult = { error: string } | void;
+
+async function toActionResult(fn: () => Promise<void>): Promise<ActionResult> {
+  try {
+    await fn();
+  } catch (e) {
+    return { error: e instanceof Error ? e.message : "Failed to delete" };
+  }
+}
 
 export async function createZoneAction(formData: FormData) {
   const name = nameSchema.parse(formData.get("name"));
   await createZone(name);
   revalidatePath("/master-data/zones");
+}
+
+export async function deleteZoneAction(id: number): Promise<ActionResult> {
+  return toActionResult(async () => {
+    await deleteZone(id);
+    revalidatePath("/master-data/zones");
+  });
 }
 
 export async function createUnitAction(formData: FormData) {
@@ -27,11 +51,25 @@ export async function createUnitAction(formData: FormData) {
   revalidatePath("/master-data/units");
 }
 
+export async function deleteUnitAction(id: number): Promise<ActionResult> {
+  return toActionResult(async () => {
+    await deleteUnit(id);
+    revalidatePath("/master-data/units");
+  });
+}
+
 export async function createCityAction(formData: FormData) {
   const unitId = z.coerce.number().int().parse(formData.get("unitId"));
   const name = nameSchema.parse(formData.get("name"));
   await createCity(unitId, name);
   revalidatePath("/master-data/cities");
+}
+
+export async function deleteCityAction(id: number): Promise<ActionResult> {
+  return toActionResult(async () => {
+    await deleteCity(id);
+    revalidatePath("/master-data/cities");
+  });
 }
 
 export async function createCenterAction(formData: FormData) {
@@ -40,6 +78,13 @@ export async function createCenterAction(formData: FormData) {
   const address = z.string().trim().optional().parse(formData.get("address") || undefined);
   await createCenter(cityId, name, address);
   revalidatePath("/master-data/centers");
+}
+
+export async function deleteCenterAction(id: number): Promise<ActionResult> {
+  return toActionResult(async () => {
+    await deleteCenter(id);
+    revalidatePath("/master-data/centers");
+  });
 }
 
 export async function setCityPriceAction(formData: FormData) {
@@ -53,18 +98,33 @@ export async function setCityPriceAction(formData: FormData) {
   revalidatePath("/master-data/pricing");
 }
 
+export async function deleteCityPricingAction(id: number): Promise<ActionResult> {
+  return toActionResult(async () => {
+    await deleteCityPricing(id);
+    revalidatePath("/master-data/pricing");
+  });
+}
+
+const optionalPasswordSchema = z
+  .string()
+  .trim()
+  .min(8, "Password must be at least 8 characters")
+  .optional()
+  .or(z.literal("").transform(() => undefined));
+
 export async function createPocAction(
   formData: FormData
-): Promise<{ tempPassword: string } | { error: string }> {
+): Promise<{ tempPassword?: string } | { error: string }> {
   const name = nameSchema.parse(formData.get("name"));
   const email = z.email().parse(formData.get("email"));
+  const password = optionalPasswordSchema.parse(formData.get("password") ?? "");
   const centerIds = formData
     .getAll("centerIds")
     .map((v) => Number(v))
     .filter((n) => Number.isInteger(n));
 
   try {
-    const { tempPassword } = await createPoc({ name, email, centerIds });
+    const { tempPassword } = await createPoc({ name, email, centerIds, password });
     revalidatePath("/master-data/pocs");
     return { tempPassword };
   } catch (e) {
@@ -72,17 +132,32 @@ export async function createPocAction(
   }
 }
 
+export async function deletePocAction(id: string): Promise<ActionResult> {
+  return toActionResult(async () => {
+    await deletePoc(id);
+    revalidatePath("/master-data/pocs");
+  });
+}
+
 export async function createAdminAction(
   formData: FormData
-): Promise<{ tempPassword: string } | { error: string }> {
+): Promise<{ tempPassword?: string } | { error: string }> {
   const name = nameSchema.parse(formData.get("name"));
   const email = z.email().parse(formData.get("email"));
+  const password = optionalPasswordSchema.parse(formData.get("password") ?? "");
 
   try {
-    const { tempPassword } = await createAdmin({ name, email });
+    const { tempPassword } = await createAdmin({ name, email, password });
     revalidatePath("/master-data/pocs");
     return { tempPassword };
   } catch (e) {
     return { error: e instanceof Error ? e.message : "Failed to create admin" };
   }
+}
+
+export async function deleteAdminAction(id: string): Promise<ActionResult> {
+  return toActionResult(async () => {
+    await deleteAdmin(id);
+    revalidatePath("/master-data/pocs");
+  });
 }

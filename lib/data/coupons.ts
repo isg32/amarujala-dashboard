@@ -21,6 +21,19 @@ export async function createCoupon(code: string, description: string | undefined
   });
 }
 
+export async function deleteCoupon(id: number) {
+  await requireAdmin();
+  try {
+    await db.delete(coupons).where(eq(coupons.id, id));
+  } catch (err) {
+    const e = err as { code?: string; cause?: { code?: string } } | null;
+    if (e && (e.code === "23503" || e.cause?.code === "23503")) {
+      throw new Error("Cannot delete — this coupon has already been applied to one or more readers.");
+    }
+    throw err;
+  }
+}
+
 export async function listCouponsForReader(readerId: number) {
   const user = await requireAppUser();
   const [reader] = await db.select({ centerId: readers.centerId }).from(readers).where(eq(readers.id, readerId));

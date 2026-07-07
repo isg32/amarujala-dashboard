@@ -1,11 +1,12 @@
 import { requireAdmin } from "@/lib/auth/session";
 import { listCoupons } from "@/lib/data/coupons";
-import { createCouponAction } from "./actions";
+import { createCouponAction, deleteCouponAction } from "./actions";
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
 import { Table, TableHeader, TableRow, TableHead, TableBody, TableCell } from "@/components/ui/table";
 import { Field, FieldLabel, FieldGroup } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
+import { DeleteButton } from "../master-data/delete-button";
 
 export default async function CouponsPage() {
   await requireAdmin();
@@ -49,6 +50,7 @@ export default async function CouponsPage() {
                 <TableHead>Code</TableHead>
                 <TableHead>Description</TableHead>
                 <TableHead>Discount</TableHead>
+                <TableHead className="text-right">Actions</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -57,11 +59,17 @@ export default async function CouponsPage() {
                   <TableCell>{c.code}</TableCell>
                   <TableCell>{c.description ?? "—"}</TableCell>
                   <TableCell>₹{c.discountAmount}</TableCell>
+                  <TableCell className="text-right">
+                    <DeleteButton
+                      action={deleteCouponAction.bind(null, c.id)}
+                      confirmMessage={`Delete coupon "${c.code}"?`}
+                    />
+                  </TableCell>
                 </TableRow>
               ))}
               {coupons.length === 0 && (
                 <TableRow>
-                  <TableCell colSpan={3} className="text-center text-muted-foreground">
+                  <TableCell colSpan={4} className="text-center text-muted-foreground">
                     No coupons yet.
                   </TableCell>
                 </TableRow>

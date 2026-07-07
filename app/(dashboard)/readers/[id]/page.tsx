@@ -11,6 +11,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { RecordPaymentForm } from "../../payments/record-payment-form";
 import { ReversePaymentButton } from "../../payments/reverse-payment-button";
+import { SendPaymentLinkButton } from "../../payments/send-payment-link-button";
 import { ApplyCouponForm } from "../../coupons/apply-coupon-form";
 import { sendPaymentReminderAction } from "./reminder-actions";
 
@@ -26,6 +27,7 @@ const METHOD_LABELS: Record<string, string> = {
   upi: "UPI",
   bank_transfer: "Bank Transfer",
   razorpay: "Razorpay",
+  payu: "PayU",
   other: "Other",
 };
 
@@ -75,6 +77,7 @@ export default async function ReaderProfilePage({
                 Send Payment Reminder
               </Button>
             </form>
+            {isAdmin && <SendPaymentLinkButton readerId={reader.id} />}
             {isAdmin && (
               <Button
                 variant="outline"

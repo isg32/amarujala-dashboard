@@ -1,12 +1,13 @@
 import { requireAdmin } from "@/lib/auth/session";
 import { listUnits, listZones } from "@/lib/data/master-data";
-import { createUnitAction } from "../actions";
+import { createUnitAction, deleteUnitAction } from "../actions";
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
 import { Table, TableHeader, TableRow, TableHead, TableBody, TableCell } from "@/components/ui/table";
 import { Field, FieldLabel, FieldGroup } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem, SelectGroup } from "@/components/ui/select";
+import { DeleteButton } from "../delete-button";
 
 export default async function UnitsPage() {
   await requireAdmin();
@@ -62,6 +63,7 @@ export default async function UnitsPage() {
               <TableRow>
                 <TableHead>Name</TableHead>
                 <TableHead>Zone</TableHead>
+                <TableHead className="text-right">Actions</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -69,6 +71,12 @@ export default async function UnitsPage() {
                 <TableRow key={unit.id}>
                   <TableCell>{unit.name}</TableCell>
                   <TableCell>{unit.zoneName}</TableCell>
+                  <TableCell className="text-right">
+                    <DeleteButton
+                      action={deleteUnitAction.bind(null, unit.id)}
+                      confirmMessage={`Delete unit "${unit.name}"?`}
+                    />
+                  </TableCell>
                 </TableRow>
               ))}
             </TableBody>

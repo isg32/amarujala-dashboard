@@ -1,12 +1,13 @@
 import { requireAdmin } from "@/lib/auth/session";
 import { listCenters, listCities } from "@/lib/data/master-data";
-import { createCenterAction } from "../actions";
+import { createCenterAction, deleteCenterAction } from "../actions";
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
 import { Table, TableHeader, TableRow, TableHead, TableBody, TableCell } from "@/components/ui/table";
 import { Field, FieldLabel, FieldGroup } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem, SelectGroup } from "@/components/ui/select";
+import { DeleteButton } from "../delete-button";
 
 export default async function CentersPage() {
   await requireAdmin();
@@ -67,6 +68,7 @@ export default async function CentersPage() {
                 <TableHead>Name</TableHead>
                 <TableHead>City</TableHead>
                 <TableHead>Address</TableHead>
+                <TableHead className="text-right">Actions</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -75,6 +77,12 @@ export default async function CentersPage() {
                   <TableCell>{center.name}</TableCell>
                   <TableCell>{center.cityName}</TableCell>
                   <TableCell>{center.address}</TableCell>
+                  <TableCell className="text-right">
+                    <DeleteButton
+                      action={deleteCenterAction.bind(null, center.id)}
+                      confirmMessage={`Delete center "${center.name}"?`}
+                    />
+                  </TableCell>
                 </TableRow>
               ))}
             </TableBody>

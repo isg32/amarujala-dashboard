@@ -1,12 +1,14 @@
 import "server-only";
+import { randomBytes } from "crypto";
 import { and, desc, eq, gte, ilike, inArray, lte, or, sql } from "drizzle-orm";
-import { requireAppUser, type AppUser } from "@/lib/auth/session";
+import { requireAdmin, requireAppUser, type AppUser } from "@/lib/auth/session";
 import { db } from "@/lib/db";
-import { payments, readers, centers, cities } from "@/lib/db/schema";
+import { payments, readers, centers, cities, paymentIntents } from "@/lib/db/schema";
 import { assertCenterInScope } from "./readers";
 import { postLedgerEntry } from "@/lib/billing/ledger";
+import { PAYU_GATEWAY_ENABLED } from "@/lib/payu/config";
 
-export type PaymentMethod = "cash" | "upi" | "bank_transfer" | "razorpay" | "other";
+export type PaymentMethod = "cash" | "upi" | "bank_transfer" | "razorpay" | "payu" | "other";
 
 function scopeToCenters(user: AppUser) {
   if (user.role === "admin") return undefined;
@@ -90,6 +92,97 @@ export async function reversePayment(paymentId: number, reason?: string) {
       tx
     );
   });
+}
+
+// Admin-only, gated by PAYU_GATEWAY_ENABLED — see lib/payu/config.ts for why.
+// Creates a pending payment_intents row for the reader's current
+// outstanding balance and returns the public /pay URL a reader can open
+// unauthenticated to complete a real PayU transaction.
+export async function createPaymentLink(readerId: number) {
+  const user = await requireAdmin();
+  if (!PAYU_GATEWAY_ENABLED) {
+    throw new Error("PayU payments are disabled. Set PAYU_GATEWAY_ENABLED=true after testing the flow to go live.");
+  }
+
+  const [reader] = await db.select().from(readers).where(eq(readers.id, readerId));
+  if (!reader) throw new Error("Reader not found.");
+
+  const amount = Number(reader.outstandingBalance);
+  if (amount <= 0) throw new Error("This reader has no outstanding balance to collect.");
+
+  const txnId = `TX_${Date.now()}_${randomBytes(4).toString("hex")}`;
+  await db.insert(paymentIntents).values({
+    readerId,
+    txnId,
+    amount: amount.toFixed(2),
+    createdBy: user.id,
+  });
+
+  return { txnId, reader };
+}
+
+// The following three functions are the one deliberate exception to this
+// file's requireAdmin()/requireAppUser() convention: they back app/pay/*
+// and the PayU webhook, which by nature have no logged-in session (the
+// reader opening the link, and PayU's own server, are both unauthenticated
+// callers). The random, unguessable txnId is the bearer credential instead
+// — same trust model as a password-reset link. Never add a lookup here that
+// takes a bare readerId/paymentIntent id without going through a txnId.
+
+export async function getPaymentIntentByTxnId(txnId: string) {
+  const [intent] = await db.select().from(paymentIntents).where(eq(paymentIntents.txnId, txnId));
+  if (!intent) return null;
+  const [reader] = await db.select().from(readers).where(eq(readers.id, intent.readerId));
+  if (!reader) return null;
+  return { intent, reader };
+}
+
+export async function markPaymentIntentResult(
+  txnId: string,
+  status: "success" | "failed",
+  recordPaymentAmount?: number
+) {
+  const [intent] = await db.select().from(paymentIntents).where(eq(paymentIntents.txnId, txnId));
+  if (!intent) throw new Error("Payment intent not found.");
+  if (intent.status === "success") return { alreadyProcessed: true, intent };
+
+  if (status === "failed") {
+    await db.update(paymentIntents).set({ status: "failed" }).where(eq(paymentIntents.txnId, txnId));
+    return { alreadyProcessed: false, intent };
+  }
+
+  await db.transaction(async (tx) => {
+    await tx
+      .update(paymentIntents)
+      .set({ status: "success", paidAt: new Date() })
+      .where(eq(paymentIntents.txnId, txnId));
+
+    const [payment] = await tx
+      .insert(payments)
+      .values({
+        readerId: intent.readerId,
+        amount: intent.amount,
+        method: "payu",
+        transactionReference: txnId,
+        paymentDate: new Date().toISOString().slice(0, 10),
+        recordedBy: intent.createdBy,
+      })
+      .returning({ id: payments.id });
+
+    await postLedgerEntry(
+      {
+        readerId: intent.readerId,
+        entryType: "payment",
+        amount: -(recordPaymentAmount ?? Number(intent.amount)),
+        referenceId: payment.id,
+        description: `PayU payment (txn ${txnId})`,
+        createdBy: intent.createdBy,
+      },
+      tx
+    );
+  });
+
+  return { alreadyProcessed: false, intent };
 }
 
 export async function listPaymentsForReader(readerId: number) {

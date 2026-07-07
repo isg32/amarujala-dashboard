@@ -1,12 +1,13 @@
 import { requireAdmin } from "@/lib/auth/session";
 import { listCityPricing, listCities } from "@/lib/data/master-data";
-import { setCityPriceAction } from "../actions";
+import { setCityPriceAction, deleteCityPricingAction } from "../actions";
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
 import { Table, TableHeader, TableRow, TableHead, TableBody, TableCell } from "@/components/ui/table";
 import { Field, FieldLabel, FieldGroup } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem, SelectGroup } from "@/components/ui/select";
+import { DeleteButton } from "../delete-button";
 
 export default async function PricingPage() {
   await requireAdmin();
@@ -67,6 +68,7 @@ export default async function PricingPage() {
                 <TableHead>City</TableHead>
                 <TableHead>Price</TableHead>
                 <TableHead>Effective from</TableHead>
+                <TableHead className="text-right">Actions</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -75,6 +77,12 @@ export default async function PricingPage() {
                   <TableCell>{row.cityName}</TableCell>
                   <TableCell>₹{row.price}</TableCell>
                   <TableCell>{row.effectiveFrom}</TableCell>
+                  <TableCell className="text-right">
+                    <DeleteButton
+                      action={deleteCityPricingAction.bind(null, row.id)}
+                      confirmMessage={`Delete this ₹${row.price} price entry for ${row.cityName}? Past billing already computed with it is unaffected.`}
+                    />
+                  </TableCell>
                 </TableRow>
               ))}
             </TableBody>

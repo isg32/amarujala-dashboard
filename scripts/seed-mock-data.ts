@@ -51,7 +51,6 @@ async function postLedgerEntry(input: {
 }
 
 const ADMIN_ID = "306c8cf6-ad7a-47a6-8e97-e0a3b4c2575b";
-const TODAY = "2026-07-07";
 
 const NAMES = [
   "Rajesh Kumar", "Sunita Sharma", "Amit Verma", "Priya Singh", "Vikram Rathore",
@@ -224,7 +223,7 @@ async function main() {
   console.log(`Recorded ${paymentCount} payments.`);
 
   // Coupons.
-  const [welcome, festive] = await db
+  const [welcome] = await db
     .insert(coupons)
     .values([
       { code: "WELCOME50", description: "New reader welcome discount", discountAmount: "50.00", createdBy: ADMIN_ID },

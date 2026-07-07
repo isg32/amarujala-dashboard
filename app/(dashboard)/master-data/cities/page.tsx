@@ -1,12 +1,13 @@
 import { requireAdmin } from "@/lib/auth/session";
 import { listCities, listUnits } from "@/lib/data/master-data";
-import { createCityAction } from "../actions";
+import { createCityAction, deleteCityAction } from "../actions";
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
 import { Table, TableHeader, TableRow, TableHead, TableBody, TableCell } from "@/components/ui/table";
 import { Field, FieldLabel, FieldGroup } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem, SelectGroup } from "@/components/ui/select";
+import { DeleteButton } from "../delete-button";
 
 export default async function CitiesPage() {
   await requireAdmin();
@@ -62,6 +63,7 @@ export default async function CitiesPage() {
               <TableRow>
                 <TableHead>Name</TableHead>
                 <TableHead>Unit</TableHead>
+                <TableHead className="text-right">Actions</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -69,6 +71,12 @@ export default async function CitiesPage() {
                 <TableRow key={city.id}>
                   <TableCell>{city.name}</TableCell>
                   <TableCell>{city.unitName}</TableCell>
+                  <TableCell className="text-right">
+                    <DeleteButton
+                      action={deleteCityAction.bind(null, city.id)}
+                      confirmMessage={`Delete city "${city.name}"? This also removes its pricing history.`}
+                    />
+                  </TableCell>
                 </TableRow>
               ))}
             </TableBody>
