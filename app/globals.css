@@ -55,7 +55,11 @@
      same color system, 6px card/input radius, pill-shaped buttons/badges —
      but no hero bands, no 144px display type, no editorial photography,
      since those are marketing-site conventions with no analog here. */
-  --background: #ffffff; /* canvas */
+  /* Light-gray canvas (not pure white) so white cards read as raised
+     surfaces instead of everything sitting flat at the same value —
+     the "everything is white-on-white" flatness was the biggest
+     contributor to the UI reading as plain. */
+  --background: #f4f4f5;
   --foreground: #25282b; /* ink */
   --card: #ffffff;
   --card-foreground: #25282b;
@@ -72,8 +76,8 @@
   --accent: #f2f2f2;
   --accent-foreground: #25282b;
   --destructive: #b30000;
-  --border: #bebebe; /* mute */
-  --input: #bebebe;
+  --border: #e2e2e3;
+  --input: #d4d4d5;
   --ring: #e60000;
   --chart-1: oklch(0.87 0 0);
   --chart-2: oklch(0.556 0 0);
@@ -81,13 +85,16 @@
   --chart-4: oklch(0.371 0 0);
   --chart-5: oklch(0.269 0 0);
   --radius: 0.375rem; /* 6px — DESIGN.md's card/input radius */
-  --sidebar: #ffffff;
-  --sidebar-foreground: #25282b;
+  /* Sidebar is always dark ink, in both light and dark mode — a fixed
+     dark rail against a light or dark canvas, rather than flipping with
+     the theme (matches the prior dashboard's dark-slate sidebar pattern). */
+  --sidebar: #1a1c1e;
+  --sidebar-foreground: #d4d4d5;
   --sidebar-primary: #e60000;
   --sidebar-primary-foreground: #ffffff;
-  --sidebar-accent: #f2f2f2;
-  --sidebar-accent-foreground: #25282b;
-  --sidebar-border: #bebebe;
+  --sidebar-accent: #2a2d30;
+  --sidebar-accent-foreground: #ffffff;
+  --sidebar-border: #2f3336;
   --sidebar-ring: #e60000;
 }
 

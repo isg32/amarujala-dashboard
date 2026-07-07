@@ -203,6 +203,7 @@ export const payments = pgTable("payments", {
   recordedBy: text("recorded_by")
     .notNull()
     .references(() => appUsers.id),
+  reversed: boolean("reversed").notNull().default(false),
   createdAt: timestamp("created_at").notNull().defaultNow(),
 });
 

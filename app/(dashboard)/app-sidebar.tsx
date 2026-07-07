@@ -1,0 +1,143 @@
+"use client";
+
+import Link from "next/link";
+import { usePathname } from "next/navigation";
+import {
+  LayoutDashboard,
+  Users,
+  CalendarCheck,
+  CreditCard,
+  BarChart3,
+  Ticket,
+  Receipt,
+  Landmark,
+  Building2,
+  MapPinned,
+  Map,
+  UserCog,
+  Tag,
+} from "lucide-react";
+import { UserButton } from "@neondatabase/auth/react/ui";
+import {
+  Sidebar,
+  SidebarHeader,
+  SidebarContent,
+  SidebarFooter,
+  SidebarGroup,
+  SidebarGroupLabel,
+  SidebarGroupContent,
+  SidebarMenu,
+  SidebarMenuItem,
+  SidebarMenuButton,
+} from "@/components/ui/sidebar";
+
+const MAIN_LINKS = [
+  { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
+  { href: "/readers", label: "Readers", icon: Users },
+  { href: "/attendance", label: "Attendance", icon: CalendarCheck },
+  { href: "/payments", label: "Payments", icon: CreditCard },
+  { href: "/reports", label: "Reports", icon: BarChart3 },
+];
+
+const ADMIN_LINKS = [
+  { href: "/coupons", label: "Coupons", icon: Ticket },
+  { href: "/billing", label: "Billing", icon: Receipt },
+];
+
+const MASTER_DATA_LINKS = [
+  { href: "/master-data/zones", label: "Zones", icon: Map },
+  { href: "/master-data/units", label: "Units", icon: MapPinned },
+  { href: "/master-data/cities", label: "Cities", icon: Building2 },
+  { href: "/master-data/centers", label: "Centers", icon: Landmark },
+  { href: "/master-data/pocs", label: "POCs", icon: UserCog },
+  { href: "/master-data/pricing", label: "Pricing", icon: Tag },
+];
+
+function NavLink({ href, label, icon: Icon, active }: { href: string; label: string; icon: typeof LayoutDashboard; active: boolean }) {
+  return (
+    <SidebarMenuItem>
+      <SidebarMenuButton isActive={active} render={<Link href={href} />}>
+        <Icon />
+        <span>{label}</span>
+      </SidebarMenuButton>
+    </SidebarMenuItem>
+  );
+}
+
+export function AppSidebar({
+  isAdmin,
+  userName,
+  userEmail,
+}: {
+  isAdmin: boolean;
+  userName: string;
+  userEmail: string;
+}) {
+  const pathname = usePathname();
+  const isActive = (href: string) => (href === "/dashboard" ? pathname === href : pathname.startsWith(href));
+
+  return (
+    <Sidebar collapsible="offcanvas">
+      <SidebarHeader className="px-3 py-4">
+        <Link href="/dashboard" className="flex items-center gap-2 px-1 font-semibold text-sidebar-foreground">
+          <span className="flex size-7 items-center justify-center rounded-md bg-sidebar-primary text-sm font-bold text-sidebar-primary-foreground">
+            R
+          </span>
+          <span>Reader Dashboard</span>
+        </Link>
+      </SidebarHeader>
+      <SidebarContent>
+        <SidebarGroup>
+          <SidebarGroupContent>
+            <SidebarMenu>
+              {MAIN_LINKS.map((link) => (
+                <NavLink key={link.href} {...link} active={isActive(link.href)} />
+              ))}
+            </SidebarMenu>
+          </SidebarGroupContent>
+        </SidebarGroup>
+
+        {isAdmin && (
+          <SidebarGroup>
+            <SidebarGroupLabel>Admin</SidebarGroupLabel>
+            <SidebarGroupContent>
+              <SidebarMenu>
+                {ADMIN_LINKS.map((link) => (
+                  <NavLink key={link.href} {...link} active={isActive(link.href)} />
+                ))}
+              </SidebarMenu>
+            </SidebarGroupContent>
+          </SidebarGroup>
+        )}
+
+        {isAdmin && (
+          <SidebarGroup>
+            <SidebarGroupLabel>Master Data</SidebarGroupLabel>
+            <SidebarGroupContent>
+              <SidebarMenu>
+                {MASTER_DATA_LINKS.map((link) => (
+                  <NavLink key={link.href} {...link} active={isActive(link.href)} />
+                ))}
+              </SidebarMenu>
+            </SidebarGroupContent>
+          </SidebarGroup>
+        )}
+      </SidebarContent>
+      <SidebarFooter className="gap-3 border-t border-sidebar-border p-3">
+        <div className="flex items-center justify-between gap-2 rounded-md bg-sidebar-accent p-2">
+          <div className="min-w-0">
+            <p className="truncate text-sm font-medium text-sidebar-accent-foreground">{userName}</p>
+            <p className="truncate text-xs text-sidebar-foreground/70">{userEmail}</p>
+          </div>
+          <UserButton />
+        </div>
+        <Link
+          href="/account/settings"
+          className="px-1 text-xs text-sidebar-foreground/70 hover:text-sidebar-foreground"
+        >
+          Settings
+        </Link>
+      </SidebarFooter>
+    </Sidebar>
+  );
+}

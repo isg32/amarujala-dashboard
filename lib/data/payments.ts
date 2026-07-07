@@ -64,6 +64,34 @@ export async function recordPayment(input: RecordPaymentInput) {
   });
 }
 
+// Admin-only: corrects a mis-entered or duplicate payment by posting an
+// offsetting ledger adjustment (adds the amount back to what's owed) and
+// flags the payment row so it can't be reversed twice. The original payment
+// row is never deleted or mutated beyond the flag — full history stays intact.
+export async function reversePayment(paymentId: number, reason?: string) {
+  const user = await requireAppUser();
+  if (user.role !== "admin") throw new Error("Only Administrators can reverse a payment.");
+
+  const [payment] = await db.select().from(payments).where(eq(payments.id, paymentId));
+  if (!payment) throw new Error("Payment not found.");
+  if (payment.reversed) throw new Error("This payment has already been reversed.");
+
+  await db.transaction(async (tx) => {
+    await tx.update(payments).set({ reversed: true }).where(eq(payments.id, paymentId));
+    await postLedgerEntry(
+      {
+        readerId: payment.readerId,
+        entryType: "adjustment",
+        amount: Number(payment.amount),
+        referenceId: paymentId,
+        description: `Reversal of payment #${paymentId}${reason ? `: ${reason}` : ""}`,
+        createdBy: user.id,
+      },
+      tx
+    );
+  });
+}
+
 export async function listPaymentsForReader(readerId: number) {
   const user = await requireAppUser();
   const [reader] = await db.select({ centerId: readers.centerId }).from(readers).where(eq(readers.id, readerId));
