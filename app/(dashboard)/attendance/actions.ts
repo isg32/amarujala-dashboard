@@ -36,3 +36,19 @@ export async function markAttendanceAction(
     return { error: e instanceof Error ? e.message : "Failed to mark attendance." };
   }
 }
+
+// Single-day toggle for the calendar view on a reader's profile.
+export async function toggleAttendanceAction(
+  readerId: number,
+  date: string,
+  status: "delivered" | "not_delivered"
+): Promise<{ error: string } | void> {
+  try {
+    dateSchema.parse(date);
+    statusSchema.parse(status);
+    await markAttendanceForReader({ readerId, dateFrom: date, dateTo: date, status });
+    revalidatePath(`/readers/${readerId}`);
+  } catch (e) {
+    return { error: e instanceof Error ? e.message : "Failed to update attendance." };
+  }
+}

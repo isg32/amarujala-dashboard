@@ -12,6 +12,7 @@ import { Button } from "@/components/ui/button";
 import { RecordPaymentForm } from "../../payments/record-payment-form";
 import { ReversePaymentButton } from "../../payments/reverse-payment-button";
 import { SendPaymentLinkButton } from "../../payments/send-payment-link-button";
+import { AttendanceCalendar } from "./attendance-calendar";
 import { ApplyCouponForm } from "../../coupons/apply-coupon-form";
 import { sendPaymentReminderAction } from "./reminder-actions";
 
@@ -53,11 +54,6 @@ export default async function ReaderProfilePage({
       isAdmin ? listCoupons() : Promise.resolve([]),
       listTransfersForReader(reader.id),
     ]);
-  const currentMonthPrefix = new Date().toISOString().slice(0, 7);
-  const thisMonth = attendanceRows.filter((a) => a.attendanceDate.startsWith(currentMonthPrefix));
-  const deliveredCount = thisMonth.filter((a) => a.status === "delivered").length;
-  const absentCount = thisMonth.filter((a) => a.status === "not_delivered").length;
-  const recentRows = [...attendanceRows].reverse().slice(0, 14);
 
   return (
     <div className="flex flex-col gap-6 max-w-2xl">
@@ -224,22 +220,13 @@ export default async function ReaderProfilePage({
       <Card>
         <CardHeader>
           <CardTitle>Attendance</CardTitle>
-          <p className="text-sm text-muted-foreground">
-            This month: {deliveredCount} delivered, {absentCount} absent
-          </p>
         </CardHeader>
         <CardContent>
-          {recentRows.length === 0 ? (
-            <p className="text-sm text-muted-foreground">No attendance marked yet.</p>
-          ) : (
-            <div className="flex flex-wrap gap-1.5">
-              {recentRows.map((a) => (
-                <Badge key={a.attendanceDate} variant={a.status === "delivered" ? "secondary" : "outline"}>
-                  {a.attendanceDate}: {a.status === "delivered" ? "Delivered" : "Absent"}
-                </Badge>
-              ))}
-            </div>
-          )}
+          <AttendanceCalendar
+            readerId={reader.id}
+            attendance={attendanceRows}
+            subscriptionStartDate={reader.subscriptionStartDate}
+          />
         </CardContent>
       </Card>
     </div>
