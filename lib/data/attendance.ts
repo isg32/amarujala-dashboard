@@ -3,6 +3,7 @@ import { asc, eq } from "drizzle-orm";
 import { requireAdmin, requireAppUser, type AppUser } from "@/lib/auth/session";
 import { db } from "@/lib/db";
 import { attendance, attendanceBulkRuns, readers, centers, cities } from "@/lib/db/schema";
+import { assertCenterInScope } from "./readers";
 
 function datesBetween(dateFrom: string, dateTo: string): string[] {
   const dates: string[] = [];
@@ -18,9 +19,7 @@ function datesBetween(dateFrom: string, dateTo: string): string[] {
 async function assertReaderInScope(user: AppUser, readerId: number) {
   const [reader] = await db.select({ centerId: readers.centerId }).from(readers).where(eq(readers.id, readerId));
   if (!reader) throw new Error("Reader not found.");
-  if (user.role === "au_poc" && !user.centerIds.includes(reader.centerId)) {
-    throw new Error("You cannot mark attendance for a reader outside your assigned Centers.");
-  }
+  assertCenterInScope(user, reader.centerId);
 }
 
 // Single reader, one or more consecutive days (dateFrom === dateTo for a

@@ -18,6 +18,14 @@ export type ReaderFilters = {
   centerId?: number;
 };
 
+// Shared by every lib/data/*.ts module that needs to check a specific
+// Center against the caller's assignment (attendance, billing, ...).
+export function assertCenterInScope(user: AppUser, centerId: number) {
+  if (user.role === "au_poc" && !user.centerIds.includes(centerId)) {
+    throw new Error("This is outside your assigned Centers.");
+  }
+}
+
 // Every reader query goes through this scoping helper: admins see everything,
 // AU POCs are restricted to their assigned Centers. Never query `readers`
 // directly from a route/action — always through this file.
