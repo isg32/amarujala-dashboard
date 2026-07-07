@@ -2,6 +2,10 @@ import { requireAdmin } from "@/lib/auth/session";
 import { listReaders } from "@/lib/data/readers";
 import { buildExportResponse } from "@/lib/export/to-excel";
 
+// Large exports can take a while to build; raise above the platform
+// default (60s is the max on Vercel's Hobby plan, raise further on Pro).
+export const maxDuration = 60;
+
 export async function GET(request: Request) {
   await requireAdmin();
   const params = new URL(request.url).searchParams;

@@ -2,6 +2,11 @@ import { requireAdmin } from "@/lib/auth/session";
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from "@/components/ui/card";
 import { CloseMonthForm } from "./close-month-form";
 
+// Closing a month iterates every eligible reader; raise the Server Action
+// timeout above the platform default (60s is the max on Vercel's Hobby
+// plan, raise further on Pro) for orgs with many readers.
+export const maxDuration = 60;
+
 export default async function BillingPage() {
   await requireAdmin();
   const defaultPeriod = new Date().toISOString().slice(0, 7);

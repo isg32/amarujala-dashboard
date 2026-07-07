@@ -8,6 +8,8 @@ import {
 } from "@/lib/data/reports";
 import { buildExportResponse } from "@/lib/export/to-excel";
 
+export const maxDuration = 60;
+
 export async function GET(request: Request, { params }: { params: Promise<{ type: string }> }) {
   await requireAdmin();
   const { type } = await params;

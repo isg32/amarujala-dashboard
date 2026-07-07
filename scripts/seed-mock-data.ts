@@ -1,8 +1,7 @@
 import { config } from "dotenv";
 config({ path: ".env.local" });
-import { Pool, neonConfig } from "@neondatabase/serverless";
-import { drizzle } from "drizzle-orm/neon-serverless";
-import ws from "ws";
+import { Pool } from "pg";
+import { drizzle } from "drizzle-orm/node-postgres";
 import { eq, inArray, sql } from "drizzle-orm";
 import {
   readers,
@@ -16,10 +15,7 @@ import {
 } from "@/lib/db/schema";
 import { calculateMonthCharge, type AttendanceStatus } from "@/lib/billing/calculate";
 
-neonConfig.webSocketConstructor = ws;
-const db = drizzle(new Pool({ connectionString: process.env.DATABASE_URL }), {
-  schema: {},
-});
+const db = drizzle({ client: new Pool({ connectionString: process.env.DATABASE_URL }), schema: {} });
 
 // Mirrors lib/billing/ledger.ts: postLedgerEntry() — reimplemented locally
 // because that module imports "server-only", which throws outside Next's

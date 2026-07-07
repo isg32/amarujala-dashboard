@@ -1,13 +1,11 @@
 import { config } from "dotenv";
 config({ path: ".env.local" });
-import { Pool, neonConfig } from "@neondatabase/serverless";
-import { drizzle } from "drizzle-orm/neon-serverless";
+import { Pool } from "pg";
+import { drizzle } from "drizzle-orm/node-postgres";
 import { sql } from "drizzle-orm";
-import ws from "ws";
 import { readers, readerBillingLedger } from "@/lib/db/schema";
 
-neonConfig.webSocketConstructor = ws;
-const db = drizzle(new Pool({ connectionString: process.env.DATABASE_URL }), { schema: {} });
+const db = drizzle({ client: new Pool({ connectionString: process.env.DATABASE_URL }), schema: {} });
 
 // Sanity check for the core billing invariant: readers.outstanding_balance
 // must always equal SUM(reader_billing_ledger.amount) for that reader. Any

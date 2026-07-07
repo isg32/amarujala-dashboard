@@ -64,6 +64,22 @@ See `.env.example` for the full list. Summary:
 | `npm run test:billing` | Run the billing calculation unit tests |
 | `npm run db:reconcile-ledger` | Verify every reader's balance matches their ledger history |
 
+## Deploying on Vercel
+
+This app is set up to deploy on Vercel with no extra build configuration:
+
+1. Import the repo into Vercel.
+2. Set the environment variables from the table above in the Vercel project settings (Production, and Preview if you want preview deploys to work against the same database).
+3. Deploy.
+
+A few things already handled for you:
+
+- **Database driver.** Uses standard Postgres (`pg`) with a pooled connection kept alive across invocations via `@vercel/functions`'s `attachDatabasePool()` — the current recommended approach for Vercel's Fluid Compute model, and it supports real transactions (needed for billing/payment atomicity). Use the **direct** `DATABASE_URL` from Neon (no `-pooler` suffix) — not the PgBouncer-pooled one.
+- **Region.** `vercel.json` pins functions to `iad1` (us-east-1) to sit next to the Neon database's own region — change this if you provision Neon somewhere else.
+- **Function timeouts.** The heavier operations (bulk Excel upload, Close Month, bulk attendance marking, report/data exports) request a 60-second timeout, the max available on Vercel's Hobby plan — raise `maxDuration` in those files if you're on Pro and still hit timeouts with a very large dataset.
+
+**Before going live:** rotate the PayU/SMS credentials (see the Status section below), and leave `PAYU_GATEWAY_ENABLED=false` until you've manually walked one real payment through `/pay` — see [CLAUDE.md](./CLAUDE.md) for why.
+
 ## Roles
 
 - **Administrator** — full access to every module, including org hierarchy setup, pricing, billing close, coupons, and account management.

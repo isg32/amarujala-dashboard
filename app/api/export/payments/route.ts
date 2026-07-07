@@ -2,7 +2,9 @@ import { requireAdmin } from "@/lib/auth/session";
 import { listPaymentTransactions, type PaymentMethod } from "@/lib/data/payments";
 import { buildExportResponse } from "@/lib/export/to-excel";
 
-const METHODS = ["cash", "upi", "bank_transfer", "razorpay", "other"];
+const METHODS = ["cash", "upi", "bank_transfer", "razorpay", "payu", "other"];
+
+export const maxDuration = 60;
 
 export async function GET(request: Request) {
   await requireAdmin();
