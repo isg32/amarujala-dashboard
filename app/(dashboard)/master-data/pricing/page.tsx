@@ -22,7 +22,7 @@ export default async function PricingPage() {
   ]);
 
   return (
-    <div className="flex flex-col gap-6 max-w-2xl">
+    <div className="mx-auto flex flex-col gap-6 max-w-2xl">
       <Card>
         <CardHeader>
           <CardTitle>Set City Price</CardTitle>

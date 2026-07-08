@@ -29,7 +29,7 @@ export default async function TransferReaderPage({
   const otherCenters = centers.filter((c) => c.id !== reader.centerId);
 
   return (
-    <Card className="max-w-md">
+    <Card className="mx-auto max-w-md">
       <CardHeader>
         <CardTitle>Transfer {reader.name}</CardTitle>
         <CardDescription>

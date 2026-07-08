@@ -56,7 +56,7 @@ export default async function ReaderProfilePage({
     ]);
 
   return (
-    <div className="flex flex-col gap-6 max-w-2xl">
+    <div className="mx-auto flex flex-col gap-6 max-w-2xl">
       <Card>
         <CardHeader className="flex items-start justify-between">
           <div>

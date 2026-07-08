@@ -21,7 +21,7 @@ export default async function AttendancePage() {
     : [[], [], []];
 
   return (
-    <Card className="max-w-2xl">
+    <Card className="mx-auto max-w-2xl">
       <CardHeader>
         <CardTitle>Delivery Attendance</CardTitle>
       </CardHeader>
