@@ -19,6 +19,7 @@ import {
   Tag,
 } from "lucide-react";
 import { UserButton } from "@neondatabase/auth/react/ui";
+import { ThemeToggle } from "./theme-toggle";
 import {
   Sidebar,
   SidebarHeader,
@@ -165,12 +166,15 @@ export function AppSidebar({
           </div>
           <UserButton size="icon" />
         </div>
-        <Link
-          href="/account/settings"
-          className="px-1 text-xs text-sidebar-foreground/70 hover:text-sidebar-foreground"
-        >
-          Settings
-        </Link>
+        <div className="flex items-center justify-between px-1">
+          <Link
+            href="/account/settings"
+            className="text-xs text-sidebar-foreground/70 hover:text-sidebar-foreground"
+          >
+            Settings
+          </Link>
+          <ThemeToggle />
+        </div>
       </SidebarFooter>
     </Sidebar>
   );
