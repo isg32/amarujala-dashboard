@@ -14,7 +14,7 @@ export default async function CentersPage() {
   const [centers, cities] = await Promise.all([listCenters(), listCities()]);
 
   return (
-    <div className="mx-auto flex flex-col gap-6 max-w-2xl">
+    <div className="flex flex-col gap-6 max-w-2xl">
       <Card>
         <CardHeader>
           <CardTitle>Add Center</CardTitle>

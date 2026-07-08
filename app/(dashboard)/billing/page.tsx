@@ -36,7 +36,7 @@ export default async function BillingPage({
 
   return (
     <div className="flex flex-col gap-6">
-      <Card className="mx-auto max-w-md">
+      <Card className="max-w-md">
         <CardHeader>
           <CardTitle>Close Month</CardTitle>
           <CardDescription>

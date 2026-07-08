@@ -13,7 +13,7 @@ export default async function CouponsPage() {
   const coupons = await listAllCoupons();
 
   return (
-    <div className="mx-auto flex flex-col gap-6 max-w-2xl">
+    <div className="flex flex-col gap-6 max-w-2xl">
       <Card>
         <CardHeader>
           <CardTitle>Create Coupon</CardTitle>

@@ -14,7 +14,7 @@ export default async function UnitsPage() {
   const [units, zones] = await Promise.all([listUnits(), listZones()]);
 
   return (
-    <div className="mx-auto flex flex-col gap-6 max-w-2xl">
+    <div className="flex flex-col gap-6 max-w-2xl">
       <Card>
         <CardHeader>
           <CardTitle>Add Unit</CardTitle>

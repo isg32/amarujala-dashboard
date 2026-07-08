@@ -13,7 +13,7 @@ export default async function PocsPage() {
   const [pocs, centers, admins] = await Promise.all([listPocs(), listCenters(), listAdmins()]);
 
   return (
-    <div className="mx-auto flex flex-col gap-6 max-w-2xl">
+    <div className="flex flex-col gap-6 max-w-2xl">
       <Card>
         <CardHeader>
           <CardTitle>Add POC</CardTitle>

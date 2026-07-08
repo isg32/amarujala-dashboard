@@ -13,5 +13,9 @@ export default async function AuthPage({
   params: Promise<{ path: string }>;
 }) {
   const { path } = await params;
-  return <AuthView pathname={path} />;
+  return (
+    <div className="flex min-h-screen items-center justify-center p-4">
+      <AuthView pathname={path} />
+    </div>
+  );
 }
