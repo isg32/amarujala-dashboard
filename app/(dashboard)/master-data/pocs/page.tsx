@@ -1,10 +1,10 @@
 import { requireAdmin } from "@/lib/auth/session";
 import { listPocs, listCenters, listAdmins } from "@/lib/data/master-data";
-import { deletePocAction, deleteAdminAction } from "../actions";
+import { deleteAdminAction } from "../actions";
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
 import { Table, TableHeader, TableRow, TableHead, TableBody, TableCell } from "@/components/ui/table";
-import { Badge } from "@/components/ui/badge";
 import { PocForm } from "./poc-form";
+import { PocRow } from "./poc-row";
 import { AddAdminForm } from "./add-admin-form";
 import { DeleteButton } from "../delete-button";
 
@@ -43,23 +43,7 @@ export default async function PocsPage() {
             </TableHeader>
             <TableBody>
               {pocs.map((poc) => (
-                <TableRow key={poc.id}>
-                  <TableCell>{poc.name}</TableCell>
-                  <TableCell>{poc.email}</TableCell>
-                  <TableCell className="flex flex-wrap gap-1">
-                    {poc.centers.map((c) => (
-                      <Badge key={c.id} variant="secondary">
-                        {c.name}
-                      </Badge>
-                    ))}
-                  </TableCell>
-                  <TableCell className="text-right">
-                    <DeleteButton
-                      action={deletePocAction.bind(null, poc.id)}
-                      confirmMessage={`Delete POC "${poc.name}"? This also removes their login.`}
-                    />
-                  </TableCell>
-                </TableRow>
+                <PocRow key={poc.id} poc={poc} allCenters={centers} />
               ))}
             </TableBody>
           </Table>

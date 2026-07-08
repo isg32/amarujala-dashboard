@@ -260,6 +260,25 @@ export async function createPoc(input: { name: string; email: string; centerIds:
   return { id, tempPassword };
 }
 
+// Name and assigned Centers are editable in place — this covers "an
+// executive left, reassign their Centers" without needing to delete and
+// recreate the POC (which would break their login history / any records
+// keyed to that Neon Auth id). Email is deliberately NOT editable here: it's
+// the actual Neon Auth login identifier, and changing app_users.email alone
+// would desync it from the real account — a genuine email change needs a
+// dedicated Neon Auth admin call we haven't wired up, not just a DB update.
+export async function updatePoc(id: string, input: { name: string; centerIds: number[]; password?: string }) {
+  await requireAdmin();
+  await db.update(appUsers).set({ name: input.name }).where(eq(appUsers.id, id));
+  await db.delete(pocCenters).where(eq(pocCenters.pocUserId, id));
+  if (input.centerIds.length > 0) {
+    await db.insert(pocCenters).values(input.centerIds.map((centerId) => ({ pocUserId: id, centerId })));
+  }
+  if (input.password) {
+    await auth.admin.setUserPassword({ userId: id, newPassword: input.password });
+  }
+}
+
 export async function deletePoc(id: string) {
   await requireAdmin();
   try {

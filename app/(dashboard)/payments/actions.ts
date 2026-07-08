@@ -36,13 +36,20 @@ export async function recordPaymentAction(
 }
 
 // Admin-only (createPaymentLink enforces this via requireAdmin). Generates
-// the PayU link and sends it to the reader by SMS in one step.
-export async function sendPaymentLinkAction(readerId: number): Promise<{ error: string } | { message: string }> {
+// the PayU link and sends it to the reader by SMS in one step. An optional
+// voucher (existing coupon) discounts the balance first — see
+// createPaymentLink's own comment for why all the failure checks (gateway
+// disabled, voucher too large, etc.) happen before the voucher is applied.
+export async function sendPaymentLinkAction(
+  readerId: number,
+  voucherCouponId?: number
+): Promise<{ error: string } | { message: string }> {
   try {
-    const { txnId, reader } = await createPaymentLink(readerId);
+    const { txnId, reader } = await createPaymentLink(readerId, voucherCouponId);
     const origin = (await headers()).get("origin") ?? `https://${(await headers()).get("host")}`;
     const payUrl = `${origin}/pay?id=${txnId}`;
     await sendPaymentLinkSms(reader, payUrl);
+    revalidatePath(`/readers/${readerId}`);
     return { message: "Payment link sent by SMS." };
   } catch (e) {
     return { error: e instanceof Error ? e.message : "Failed to send payment link." };

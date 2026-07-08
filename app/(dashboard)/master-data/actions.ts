@@ -17,6 +17,7 @@ import {
   updatePricingOverride,
   deletePricingOverride,
   createPoc,
+  updatePoc,
   deletePoc,
   createAdmin,
   deleteAdmin,
@@ -163,6 +164,22 @@ export async function createPocAction(
     return { tempPassword };
   } catch (e) {
     return { error: e instanceof Error ? e.message : "Failed to create POC" };
+  }
+}
+
+export async function updatePocAction(formData: FormData): Promise<ActionResult> {
+  const id = z.string().min(1).parse(formData.get("id"));
+  const name = nameSchema.parse(formData.get("name"));
+  const password = optionalPasswordSchema.parse(formData.get("password") ?? "");
+  const centerIds = formData
+    .getAll("centerIds")
+    .map((v) => Number(v))
+    .filter((n) => Number.isInteger(n));
+  try {
+    await updatePoc(id, { name, centerIds, password });
+    revalidatePath("/master-data/pocs");
+  } catch (e) {
+    return { error: e instanceof Error ? e.message : "Failed to update POC" };
   }
 }
 

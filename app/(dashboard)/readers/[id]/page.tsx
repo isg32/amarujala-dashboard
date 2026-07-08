@@ -73,7 +73,7 @@ export default async function ReaderProfilePage({
                 Send Payment Reminder
               </Button>
             </form>
-            {isAdmin && <SendPaymentLinkButton readerId={reader.id} />}
+            {isAdmin && <SendPaymentLinkButton readerId={reader.id} coupons={availableCoupons} />}
             {isAdmin && (
               <Button
                 variant="outline"
