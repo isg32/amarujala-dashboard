@@ -13,6 +13,9 @@ import {
   deleteCenter,
   setCityPrice,
   deleteCityPricing,
+  createPricingOverride,
+  updatePricingOverride,
+  deletePricingOverride,
   createPoc,
   deletePoc,
   createAdmin,
@@ -101,6 +104,37 @@ export async function setCityPriceAction(formData: FormData) {
 export async function deleteCityPricingAction(id: number): Promise<ActionResult> {
   return toActionResult(async () => {
     await deleteCityPricing(id);
+    revalidatePath("/master-data/pricing");
+  });
+}
+
+export async function createPricingOverrideAction(formData: FormData): Promise<ActionResult> {
+  const scope = z.enum(["global", "unit", "center"]).parse(formData.get("scope"));
+  const scopeId = scope === "global" ? null : z.coerce.number().int().positive().parse(formData.get("scopeId"));
+  const dailyPrice = z.coerce.number().positive().parse(formData.get("dailyPrice")).toFixed(2);
+  try {
+    await createPricingOverride({ scope, scopeId, dailyPrice });
+    revalidatePath("/master-data/pricing");
+  } catch (e) {
+    return { error: e instanceof Error ? e.message : "Failed to add price override" };
+  }
+}
+
+export async function updatePricingOverrideAction(formData: FormData): Promise<ActionResult> {
+  const id = z.coerce.number().int().positive().parse(formData.get("id"));
+  const dailyPrice = z.coerce.number().positive().parse(formData.get("dailyPrice")).toFixed(2);
+  const active = formData.get("active") === "on";
+  try {
+    await updatePricingOverride(id, { dailyPrice, active });
+    revalidatePath("/master-data/pricing");
+  } catch (e) {
+    return { error: e instanceof Error ? e.message : "Failed to update price override" };
+  }
+}
+
+export async function deletePricingOverrideAction(id: number): Promise<ActionResult> {
+  return toActionResult(async () => {
+    await deletePricingOverride(id);
     revalidatePath("/master-data/pricing");
   });
 }

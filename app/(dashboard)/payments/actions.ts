@@ -49,6 +49,25 @@ export async function sendPaymentLinkAction(readerId: number): Promise<{ error: 
   }
 }
 
+// Bulk variant of sendPaymentLinkAction, for the reader directory's
+// checkbox-select toolbar. Continues past individual failures (e.g. a
+// reader with no balance due) so one bad row doesn't block the rest.
+export async function sendBulkPaymentLinksAction(readerIds: number[]): Promise<{ message: string }> {
+  const origin = (await headers()).get("origin") ?? `https://${(await headers()).get("host")}`;
+  let sent = 0;
+  let failed = 0;
+  for (const readerId of readerIds) {
+    try {
+      const { txnId, reader } = await createPaymentLink(readerId);
+      await sendPaymentLinkSms(reader, `${origin}/pay?id=${txnId}`);
+      sent++;
+    } catch {
+      failed++;
+    }
+  }
+  return { message: `Sent ${sent} link(s)${failed ? `, ${failed} skipped (e.g. no balance due)` : ""}.` };
+}
+
 export async function reversePaymentAction(
   paymentId: number,
   reason?: string

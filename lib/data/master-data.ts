@@ -10,6 +10,7 @@ import {
   cities,
   centers,
   cityPricing,
+  pricingOverrides,
   appUsers,
   pocCenters,
 } from "@/lib/db/schema";
@@ -153,6 +154,61 @@ export async function setCityPrice(cityId: number, price: string, effectiveFrom:
 export async function deleteCityPricing(id: number) {
   await requireAdmin();
   await db.delete(cityPricing).where(eq(cityPricing.id, id));
+}
+
+// "Day Rates": flat per-day overrides layered on top of city_pricing, at
+// Unit/Center/Global scope — see lib/db/schema.ts's pricingOverrides for
+// the full rationale and lib/billing/calculate.ts's resolveDailyRate() for
+// how these are applied during billing.
+export async function listPricingOverrides() {
+  await requireAdmin();
+  const [overrides, unitRows, centerRows] = await Promise.all([
+    db.select().from(pricingOverrides).orderBy(asc(pricingOverrides.scope)),
+    db.select({ id: units.id, name: units.name }).from(units),
+    db.select({ id: centers.id, name: centers.name }).from(centers),
+  ]);
+  const unitNames = new Map(unitRows.map((u) => [u.id, u.name]));
+  const centerNames = new Map(centerRows.map((c) => [c.id, c.name]));
+
+  return overrides.map((o) => ({
+    ...o,
+    scopeLabel:
+      o.scope === "global"
+        ? "Global"
+        : o.scope === "unit"
+          ? (unitNames.get(o.scopeId!) ?? "Unknown unit")
+          : (centerNames.get(o.scopeId!) ?? "Unknown center"),
+  }));
+}
+
+export async function createPricingOverride(input: {
+  scope: "global" | "unit" | "center";
+  scopeId: number | null;
+  dailyPrice: string;
+}) {
+  const user = await requireAdmin();
+  if (input.scope !== "global" && input.scopeId == null) {
+    throw new Error("A Unit or Center override needs a scope selected.");
+  }
+  await db.insert(pricingOverrides).values({
+    scope: input.scope,
+    scopeId: input.scope === "global" ? null : input.scopeId,
+    dailyPrice: input.dailyPrice,
+    createdBy: user.id,
+  });
+}
+
+export async function updatePricingOverride(id: number, input: { dailyPrice: string; active: boolean }) {
+  await requireAdmin();
+  await db
+    .update(pricingOverrides)
+    .set({ dailyPrice: input.dailyPrice, active: input.active })
+    .where(eq(pricingOverrides.id, id));
+}
+
+export async function deletePricingOverride(id: number) {
+  await requireAdmin();
+  await db.delete(pricingOverrides).where(eq(pricingOverrides.id, id));
 }
 
 export async function listPocs() {

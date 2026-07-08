@@ -1,6 +1,6 @@
 import "server-only";
 import { alias } from "drizzle-orm/pg-core";
-import { and, asc, desc, eq, gte, ilike, inArray, or, sql } from "drizzle-orm";
+import { and, asc, desc, eq, gt, gte, ilike, inArray, or, sql } from "drizzle-orm";
 import { requireAdmin, requireAppUser, type AppUser } from "@/lib/auth/session";
 import { db } from "@/lib/db";
 import { readers, centers, cities, units, zones, appUsers, pocCenters, readerTransfers } from "@/lib/db/schema";
@@ -17,6 +17,8 @@ export type ReaderFilters = {
   unitId?: number;
   cityId?: number;
   centerId?: number;
+  landmark?: string;
+  dueOnly?: boolean;
 };
 
 // Shared by every lib/data/*.ts module that needs to check a specific
@@ -90,6 +92,8 @@ export async function listReaders(filters: ReaderFilters = {}) {
   if (filters.cityId) conditions.push(eq(centers.cityId, filters.cityId));
   if (filters.unitId) conditions.push(eq(cities.unitId, filters.unitId));
   if (filters.zoneId) conditions.push(eq(units.zoneId, filters.zoneId));
+  if (filters.landmark) conditions.push(ilike(readers.landmark, `%${filters.landmark}%`));
+  if (filters.dueOnly) conditions.push(gt(readers.outstandingBalance, "0"));
 
   return baseReaderQuery()
     .where(and(...conditions.filter((c) => c !== undefined)))
@@ -296,4 +300,23 @@ export async function listTransfersForReader(readerId: number) {
     .innerJoin(toCenters, eq(readerTransfers.toCenterId, toCenters.id))
     .where(eq(readerTransfers.readerId, readerId))
     .orderBy(desc(readerTransfers.transferredAt));
+}
+
+// Admin-only. A reader with any real history (attendance, payments, ledger
+// entries, coupons, transfers) can't actually be deleted — the FK is
+// default RESTRICT, same pattern as master-data deletes — so this is safe
+// to expose broadly: it only ever succeeds for readers with zero activity.
+export async function bulkDeleteReaders(readerIds: number[]): Promise<{ deleted: number; blocked: number }> {
+  await requireAdmin();
+  let deleted = 0;
+  let blocked = 0;
+  for (const id of readerIds) {
+    try {
+      await db.delete(readers).where(eq(readers.id, id));
+      deleted++;
+    } catch {
+      blocked++;
+    }
+  }
+  return { deleted, blocked };
 }

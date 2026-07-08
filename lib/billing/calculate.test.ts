@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { calculateMonthCharge, priceOnDate, daysInMonth } from "./calculate";
+import { calculateMonthCharge, priceOnDate, resolveDailyRate, daysInMonth } from "./calculate";
 
 const JULY_PRICE = [{ price: 310, effectiveFrom: "2026-01-01" }]; // 310/31 = 10/day exactly
 
@@ -124,4 +124,61 @@ test("daysInMonth handles leap years", () => {
   assert.equal(daysInMonth(2028, 2), 29);
   assert.equal(daysInMonth(2026, 2), 28);
   assert.equal(daysInMonth(2026, 7), 31);
+});
+
+test("resolveDailyRate: center override wins over everything", () => {
+  const rate = resolveDailyRate({
+    date: "2026-07-01",
+    pricingHistory: [{ price: 310, effectiveFrom: "2026-01-01" }],
+    totalDaysInMonth: 31,
+    centerOverride: 7,
+    unitOverride: 5,
+    globalDefault: 8,
+  });
+  assert.equal(rate, 7);
+});
+
+test("resolveDailyRate: unit override wins over city pricing history", () => {
+  const rate = resolveDailyRate({
+    date: "2026-07-01",
+    pricingHistory: [{ price: 310, effectiveFrom: "2026-01-01" }],
+    totalDaysInMonth: 31,
+    unitOverride: 5,
+  });
+  assert.equal(rate, 5);
+});
+
+test("resolveDailyRate: falls back to city pricing history (divided by days in month)", () => {
+  const rate = resolveDailyRate({
+    date: "2026-07-01",
+    pricingHistory: [{ price: 310, effectiveFrom: "2026-01-01" }],
+    totalDaysInMonth: 31,
+  });
+  assert.equal(rate, 10);
+});
+
+test("resolveDailyRate: global default only applies when city has no price at all", () => {
+  const rate = resolveDailyRate({
+    date: "2026-07-01",
+    pricingHistory: [],
+    totalDaysInMonth: 31,
+    globalDefault: 8,
+  });
+  assert.equal(rate, 8);
+});
+
+test("resolveDailyRate: throws when nothing resolves", () => {
+  assert.throws(() => resolveDailyRate({ date: "2026-07-01", pricingHistory: [], totalDaysInMonth: 31 }));
+});
+
+test("calculateMonthCharge honors a unit override as a flat per-day rate", () => {
+  const charge = calculateMonthCharge({
+    billingPeriod: "2026-07",
+    subscriptionStartDate: "2026-01-01",
+    attendance: {},
+    pricingHistory: JULY_PRICE, // would otherwise bill 310 for the month
+    today: "2026-08-01",
+    unitOverride: 7,
+  });
+  assert.equal(charge, 7 * 31);
 });

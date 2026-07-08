@@ -11,6 +11,15 @@ export async function listCoupons() {
   return db.select().from(coupons).where(eq(coupons.active, true)).orderBy(asc(coupons.code));
 }
 
+// For the admin coupon-management table, which needs to see (and re-enable)
+// inactive coupons too — listCoupons() above stays active-only since it
+// also feeds the apply-to-reader dropdown, which shouldn't offer inactive
+// codes.
+export async function listAllCoupons() {
+  await requireAdmin();
+  return db.select().from(coupons).orderBy(asc(coupons.code));
+}
+
 export async function createCoupon(code: string, description: string | undefined, discountAmount: number) {
   const user = await requireAdmin();
   await db.insert(coupons).values({
@@ -19,6 +28,21 @@ export async function createCoupon(code: string, description: string | undefined
     discountAmount: discountAmount.toFixed(2),
     createdBy: user.id,
   });
+}
+
+export async function updateCoupon(
+  id: number,
+  input: { description?: string; discountAmount: number; active: boolean }
+) {
+  await requireAdmin();
+  await db
+    .update(coupons)
+    .set({
+      description: input.description,
+      discountAmount: input.discountAmount.toFixed(2),
+      active: input.active,
+    })
+    .where(eq(coupons.id, id));
 }
 
 export async function deleteCoupon(id: number) {

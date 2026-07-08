@@ -1,17 +1,25 @@
 import { requireAdmin } from "@/lib/auth/session";
-import { listCityPricing, listCities } from "@/lib/data/master-data";
+import { listCityPricing, listCities, listUnits, listCenters, listPricingOverrides } from "@/lib/data/master-data";
 import { setCityPriceAction, deleteCityPricingAction } from "../actions";
-import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
+import { Card, CardHeader, CardTitle, CardDescription, CardContent } from "@/components/ui/card";
 import { Table, TableHeader, TableRow, TableHead, TableBody, TableCell } from "@/components/ui/table";
 import { Field, FieldLabel, FieldGroup } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem, SelectGroup } from "@/components/ui/select";
 import { DeleteButton } from "../delete-button";
+import { PricingOverrideForm } from "./pricing-override-form";
+import { PricingOverrideRow } from "./pricing-override-row";
 
 export default async function PricingPage() {
   await requireAdmin();
-  const [pricing, cities] = await Promise.all([listCityPricing(), listCities()]);
+  const [pricing, cities, units, centers, overrides] = await Promise.all([
+    listCityPricing(),
+    listCities(),
+    listUnits(),
+    listCenters(),
+    listPricingOverrides(),
+  ]);
 
   return (
     <div className="flex flex-col gap-6 max-w-2xl">
@@ -85,6 +93,50 @@ export default async function PricingPage() {
                   </TableCell>
                 </TableRow>
               ))}
+            </TableBody>
+          </Table>
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>Day Rates</CardTitle>
+          <CardDescription>
+            Flat per-day price overrides by Unit, Center, or organization-wide default — take priority over city
+            pricing above wherever they apply. A Center override wins over a Unit override.
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <PricingOverrideForm units={units} centers={centers} />
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>Day Rate overrides</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>Scope</TableHead>
+                <TableHead>Value</TableHead>
+                <TableHead>Daily Price</TableHead>
+                <TableHead>Active</TableHead>
+                <TableHead className="text-right">Actions</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {overrides.map((o) => (
+                <PricingOverrideRow key={o.id} override={o} />
+              ))}
+              {overrides.length === 0 && (
+                <TableRow>
+                  <TableCell colSpan={5} className="text-center text-muted-foreground">
+                    No day rate overrides yet.
+                  </TableCell>
+                </TableRow>
+              )}
             </TableBody>
           </Table>
         </CardContent>

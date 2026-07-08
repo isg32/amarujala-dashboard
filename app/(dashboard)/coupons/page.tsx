@@ -1,16 +1,16 @@
 import { requireAdmin } from "@/lib/auth/session";
-import { listCoupons } from "@/lib/data/coupons";
-import { createCouponAction, deleteCouponAction } from "./actions";
+import { listAllCoupons } from "@/lib/data/coupons";
+import { createCouponAction } from "./actions";
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
 import { Table, TableHeader, TableRow, TableHead, TableBody, TableCell } from "@/components/ui/table";
 import { Field, FieldLabel, FieldGroup } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
-import { DeleteButton } from "../master-data/delete-button";
+import { CouponRow } from "./coupon-row";
 
 export default async function CouponsPage() {
   await requireAdmin();
-  const coupons = await listCoupons();
+  const coupons = await listAllCoupons();
 
   return (
     <div className="flex flex-col gap-6 max-w-2xl">
@@ -50,26 +50,17 @@ export default async function CouponsPage() {
                 <TableHead>Code</TableHead>
                 <TableHead>Description</TableHead>
                 <TableHead>Discount</TableHead>
+                <TableHead>Active</TableHead>
                 <TableHead className="text-right">Actions</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
               {coupons.map((c) => (
-                <TableRow key={c.id}>
-                  <TableCell>{c.code}</TableCell>
-                  <TableCell>{c.description ?? "—"}</TableCell>
-                  <TableCell>₹{c.discountAmount}</TableCell>
-                  <TableCell className="text-right">
-                    <DeleteButton
-                      action={deleteCouponAction.bind(null, c.id)}
-                      confirmMessage={`Delete coupon "${c.code}"?`}
-                    />
-                  </TableCell>
-                </TableRow>
+                <CouponRow key={c.id} coupon={c} />
               ))}
               {coupons.length === 0 && (
                 <TableRow>
-                  <TableCell colSpan={4} className="text-center text-muted-foreground">
+                  <TableCell colSpan={5} className="text-center text-muted-foreground">
                     No coupons yet.
                   </TableCell>
                 </TableRow>

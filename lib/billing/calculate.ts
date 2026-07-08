@@ -26,6 +26,32 @@ export function priceOnDate(pricingHistory: PricePeriod[], date: string): number
   return applicable[0].price;
 }
 
+// A Center or Unit override, when active, pins the DAILY rate outright
+// (unlike city_pricing, which is a monthly price divided by days_in_month —
+// overrides are already per-day, matching how they're entered in the UI).
+// This is the "Day Rates" mechanism (e.g. a Unit that always charges a flat
+// per-day rate). Falls back to the normal city_pricing history lookup
+// (divided down to a daily rate) when no override applies, and only reaches
+// for the org-wide global default if that city has no price configured at
+// all (so global never silently overrides a real, configured city price).
+export function resolveDailyRate(params: {
+  date: string;
+  pricingHistory: PricePeriod[];
+  totalDaysInMonth: number;
+  centerOverride?: number | null;
+  unitOverride?: number | null;
+  globalDefault?: number | null;
+}): number {
+  if (params.centerOverride != null) return params.centerOverride;
+  if (params.unitOverride != null) return params.unitOverride;
+  try {
+    return priceOnDate(params.pricingHistory, params.date) / params.totalDaysInMonth;
+  } catch (err) {
+    if (params.globalDefault != null) return params.globalDefault;
+    throw err;
+  }
+}
+
 export interface CalculateMonthChargeParams {
   /** 'YYYY-MM' */
   billingPeriod: string;
@@ -41,6 +67,10 @@ export interface CalculateMonthChargeParams {
    * already past month-end, so the full month is billed).
    */
   today?: string;
+  /** Optional Day Rates overrides — see resolveDailyPrice(). */
+  centerOverride?: number | null;
+  unitOverride?: number | null;
+  globalDefault?: number | null;
 }
 
 export function calculateMonthCharge(params: CalculateMonthChargeParams): number {
@@ -64,7 +94,14 @@ export function calculateMonthCharge(params: CalculateMonthChargeParams): number
     const dateStr = cursor.toISOString().slice(0, 10);
     const status = params.attendance[dateStr];
     if (status !== "not_delivered") {
-      total += priceOnDate(params.pricingHistory, dateStr) / totalDaysInMonth;
+      total += resolveDailyRate({
+        date: dateStr,
+        pricingHistory: params.pricingHistory,
+        totalDaysInMonth,
+        centerOverride: params.centerOverride,
+        unitOverride: params.unitOverride,
+        globalDefault: params.globalDefault,
+      });
     }
     cursor.setUTCDate(cursor.getUTCDate() + 1);
   }

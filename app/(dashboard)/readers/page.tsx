@@ -1,11 +1,11 @@
 import Link from "next/link";
 import { getCurrentAppUser } from "@/lib/auth/session";
 import { listReaders, listAssignableCentersWithPocs } from "@/lib/data/readers";
+import { listUnits } from "@/lib/data/master-data";
 import { Card, CardContent } from "@/components/ui/card";
-import { Table, TableHeader, TableRow, TableHead, TableBody, TableCell } from "@/components/ui/table";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
+import { Checkbox } from "@/components/ui/checkbox";
 import {
   Select,
   SelectTrigger,
@@ -14,25 +14,43 @@ import {
   SelectItem,
   SelectGroup,
 } from "@/components/ui/select";
+import { ReaderTable } from "./reader-table";
 
 export default async function ReadersPage({
   searchParams,
 }: {
-  searchParams: Promise<{ search?: string; status?: string; centerId?: string; newlyAdded?: string }>;
+  searchParams: Promise<{
+    search?: string;
+    status?: string;
+    centerId?: string;
+    unitId?: string;
+    landmark?: string;
+    dueOnly?: string;
+    newlyAdded?: string;
+  }>;
 }) {
   const params = await searchParams;
   const centerId = params.centerId ? Number(params.centerId) : undefined;
+  const unitId = params.unitId ? Number(params.unitId) : undefined;
   const status = params.status === "active" || params.status === "inactive" ? params.status : undefined;
+  const dueOnly = params.dueOnly === "true";
 
-  const [readerRows, centers, currentUser] = await Promise.all([
+  const currentUser = await getCurrentAppUser();
+  const isAdmin = currentUser?.role === "admin";
+
+  const [readerRows, centers, units] = await Promise.all([
     listReaders({
       search: params.search || undefined,
       status,
       centerId,
+      unitId,
+      landmark: params.landmark || undefined,
+      dueOnly,
       newlyAdded: params.newlyAdded === "true",
     }),
     listAssignableCentersWithPocs(),
-    getCurrentAppUser(),
+    // listUnits() is requireAdmin()-gated; AU POCs don't get a Unit filter.
+    isAdmin ? listUnits() : Promise.resolve([]),
   ]);
 
   const exportQuery = new URLSearchParams();
@@ -45,7 +63,7 @@ export default async function ReadersPage({
       <div className="flex items-center justify-between">
         <h1 className="text-lg font-semibold">Reader Directory</h1>
         <div className="flex gap-2">
-          {currentUser?.role === "admin" && (
+          {isAdmin && (
             <Button variant="outline" render={<a href={`/api/export/readers?${exportQuery}`} />} nativeButton={false}>
               Export
             </Button>
@@ -66,21 +84,26 @@ export default async function ReadersPage({
               <label htmlFor="search" className="text-sm font-medium">Search</label>
               <Input id="search" name="search" defaultValue={params.search} placeholder="Name, mobile, email, reader ID" className="w-64" />
             </div>
-            <div className="flex flex-col gap-1.5">
-              <label htmlFor="status" className="text-sm font-medium">Status</label>
-              <Select name="status" defaultValue={params.status || "any"}>
-                <SelectTrigger id="status" className="w-36">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectGroup>
-                    <SelectItem value="any">Any</SelectItem>
-                    <SelectItem value="active">Active</SelectItem>
-                    <SelectItem value="inactive">Inactive</SelectItem>
-                  </SelectGroup>
-                </SelectContent>
-              </Select>
-            </div>
+            {isAdmin && (
+              <div className="flex flex-col gap-1.5">
+                <label htmlFor="unitId" className="text-sm font-medium">Unit</label>
+                <Select name="unitId" defaultValue={params.unitId || "any"}>
+                  <SelectTrigger id="unitId" className="w-40">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectGroup>
+                      <SelectItem value="any">Any</SelectItem>
+                      {units.map((u) => (
+                        <SelectItem key={u.id} value={String(u.id)}>
+                          {u.name}
+                        </SelectItem>
+                      ))}
+                    </SelectGroup>
+                  </SelectContent>
+                </Select>
+              </div>
+            )}
             <div className="flex flex-col gap-1.5">
               <label htmlFor="centerId" className="text-sm font-medium">Center</label>
               <Select name="centerId" defaultValue={params.centerId || "any"}>
@@ -99,6 +122,29 @@ export default async function ReadersPage({
                 </SelectContent>
               </Select>
             </div>
+            <div className="flex flex-col gap-1.5">
+              <label htmlFor="landmark" className="text-sm font-medium">Landmark</label>
+              <Input id="landmark" name="landmark" defaultValue={params.landmark} placeholder="Any" className="w-40" />
+            </div>
+            <div className="flex flex-col gap-1.5">
+              <label htmlFor="status" className="text-sm font-medium">Status</label>
+              <Select name="status" defaultValue={params.status || "any"}>
+                <SelectTrigger id="status" className="w-36">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectGroup>
+                    <SelectItem value="any">Any</SelectItem>
+                    <SelectItem value="active">Active</SelectItem>
+                    <SelectItem value="inactive">Inactive</SelectItem>
+                  </SelectGroup>
+                </SelectContent>
+              </Select>
+            </div>
+            <label className="flex items-center gap-2 pb-2 text-sm">
+              <Checkbox name="dueOnly" value="true" defaultChecked={dueOnly} />
+              Show only with due payments
+            </label>
             <Button type="submit" variant="outline">Apply filters</Button>
           </form>
         </CardContent>
@@ -106,50 +152,7 @@ export default async function ReadersPage({
 
       <Card>
         <CardContent>
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>Reader</TableHead>
-                <TableHead>Mobile</TableHead>
-                <TableHead>City</TableHead>
-                <TableHead>Center</TableHead>
-                <TableHead>POC</TableHead>
-                <TableHead>Subscription Start</TableHead>
-                <TableHead>Outstanding</TableHead>
-                <TableHead>Status</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {readerRows.map((reader) => (
-                <TableRow key={reader.id}>
-                  <TableCell>
-                    <Link href={`/readers/${reader.id}`} className="hover:underline">
-                      {reader.name}
-                    </Link>
-                    <div className="text-xs text-muted-foreground">{reader.readerCode}</div>
-                  </TableCell>
-                  <TableCell>{reader.mobile}</TableCell>
-                  <TableCell>{reader.cityName}</TableCell>
-                  <TableCell>{reader.centerName}</TableCell>
-                  <TableCell>{reader.pocName ?? "—"}</TableCell>
-                  <TableCell>{reader.subscriptionStartDate}</TableCell>
-                  <TableCell>₹{reader.outstandingBalance}</TableCell>
-                  <TableCell>
-                    <Badge variant={reader.status === "active" ? "secondary" : "outline"}>
-                      {reader.status}
-                    </Badge>
-                  </TableCell>
-                </TableRow>
-              ))}
-              {readerRows.length === 0 && (
-                <TableRow>
-                  <TableCell colSpan={8} className="text-center text-muted-foreground">
-                    No readers found.
-                  </TableCell>
-                </TableRow>
-              )}
-            </TableBody>
-          </Table>
+          <ReaderTable readers={readerRows} isAdmin={isAdmin} />
         </CardContent>
       </Card>
     </div>

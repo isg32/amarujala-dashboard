@@ -40,6 +40,11 @@ export const paymentIntentStatusEnum = pgEnum("payment_intent_status", [
   "success",
   "failed",
 ]);
+export const pricingOverrideScopeEnum = pgEnum("pricing_override_scope", [
+  "global",
+  "unit",
+  "center",
+]);
 export const ledgerEntryTypeEnum = pgEnum("ledger_entry_type", [
   "monthly_charge",
   "payment",
@@ -113,6 +118,25 @@ export const cityPricing = pgTable("city_pricing", {
     .references(() => cities.id),
   price: numeric("price", { precision: 10, scale: 2 }).notNull(),
   effectiveFrom: date("effective_from").notNull(),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+});
+
+// Flat per-day rate overrides ("Day Rates") layered on top of city_pricing:
+// a Center or Unit override pins the daily rate outright for every day
+// billed under that scope, bypassing city pricing history entirely; a
+// "global" row (scopeId null) is the org-wide fallback used only when a
+// city has no price configured at all. scopeId is polymorphic (points at
+// units.id or centers.id depending on scope) — same intentionally-FK-less
+// pattern as attendance_bulk_runs.scope_id.
+export const pricingOverrides = pgTable("pricing_overrides", {
+  id: serial("id").primaryKey(),
+  scope: pricingOverrideScopeEnum("scope").notNull(),
+  scopeId: integer("scope_id"),
+  dailyPrice: numeric("daily_price", { precision: 10, scale: 2 }).notNull(),
+  active: boolean("active").notNull().default(true),
+  createdBy: text("created_by")
+    .notNull()
+    .references(() => appUsers.id),
   createdAt: timestamp("created_at").notNull().defaultNow(),
 });
 

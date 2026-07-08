@@ -1,8 +1,9 @@
 "use server";
 
 import { redirect } from "next/navigation";
+import { revalidatePath } from "next/cache";
 import { readerInputSchema } from "@/lib/validation/reader";
-import { createReader } from "@/lib/data/readers";
+import { createReader, bulkDeleteReaders } from "@/lib/data/readers";
 
 export async function createReaderAction(formData: FormData) {
   const input = readerInputSchema.parse({
@@ -19,4 +20,12 @@ export async function createReaderAction(formData: FormData) {
 
   const { id } = await createReader(input);
   redirect(`/readers/${id}`);
+}
+
+export async function bulkDeleteReadersAction(readerIds: number[]): Promise<{ message: string }> {
+  const { deleted, blocked } = await bulkDeleteReaders(readerIds);
+  revalidatePath("/readers");
+  return {
+    message: `Deleted ${deleted} reader(s)${blocked ? `, ${blocked} skipped (they have payment/attendance history)` : ""}.`,
+  };
 }
