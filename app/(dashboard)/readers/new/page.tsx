@@ -6,7 +6,7 @@ export default async function NewReaderPage() {
   const centers = await listAssignableCentersWithPocs();
 
   return (
-    <Card className="max-w-2xl">
+    <Card>
       <CardHeader>
         <CardTitle>Add Reader</CardTitle>
       </CardHeader>

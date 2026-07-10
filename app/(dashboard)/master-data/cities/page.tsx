@@ -1,20 +1,20 @@
 import { requireAdmin } from "@/lib/auth/session";
 import { listCities, listUnits } from "@/lib/data/master-data";
-import { createCityAction, deleteCityAction } from "../actions";
+import { createCityAction } from "../actions";
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
-import { Table, TableHeader, TableRow, TableHead, TableBody, TableCell } from "@/components/ui/table";
+import { Table, TableHeader, TableRow, TableHead, TableBody } from "@/components/ui/table";
 import { Field, FieldLabel, FieldGroup } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem, SelectGroup } from "@/components/ui/select";
-import { DeleteButton } from "../delete-button";
+import { CityRow } from "./city-row";
 
 export default async function CitiesPage() {
   await requireAdmin();
   const [cities, units] = await Promise.all([listCities(), listUnits()]);
 
   return (
-    <div className="flex flex-col gap-6 max-w-2xl">
+    <div className="flex flex-col gap-6 overflow-x-auto">
       <Card>
         <CardHeader>
           <CardTitle>Add City</CardTitle>
@@ -27,7 +27,11 @@ export default async function CitiesPage() {
               <FieldGroup className="flex-1">
                 <Field>
                   <FieldLabel htmlFor="unitId">Unit</FieldLabel>
-                  <Select name="unitId" required>
+                  <Select
+                    name="unitId"
+                    required
+                    items={Object.fromEntries(units.map((u) => [String(u.id), `${u.name} (${u.zoneName})`]))}
+                  >
                     <SelectTrigger id="unitId" className="w-full">
                       <SelectValue placeholder="Select a unit" />
                     </SelectTrigger>
@@ -68,16 +72,7 @@ export default async function CitiesPage() {
             </TableHeader>
             <TableBody>
               {cities.map((city) => (
-                <TableRow key={city.id}>
-                  <TableCell>{city.name}</TableCell>
-                  <TableCell>{city.unitName}</TableCell>
-                  <TableCell className="text-right">
-                    <DeleteButton
-                      action={deleteCityAction.bind(null, city.id)}
-                      confirmMessage={`Delete city "${city.name}"? This also removes its pricing history.`}
-                    />
-                  </TableCell>
-                </TableRow>
+                <CityRow key={city.id} city={city} units={units} />
               ))}
             </TableBody>
           </Table>

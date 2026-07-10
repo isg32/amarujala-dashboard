@@ -31,6 +31,9 @@ export async function markAttendanceForReader(input: {
   status: "delivered" | "not_delivered";
 }) {
   const user = await requireAppUser();
+  if (user.role === "au_poc" && !user.permissions.canMarkAttendance) {
+    throw new Error("You don't have permission to mark attendance. Contact an Administrator.");
+  }
   await assertReaderInScope(user, input.readerId);
 
   const dates = datesBetween(input.dateFrom, input.dateTo);

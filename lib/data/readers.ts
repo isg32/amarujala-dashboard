@@ -49,6 +49,7 @@ const readerListSelection = {
   remarks: readers.remarks,
   status: readers.status,
   subscriptionStartDate: readers.subscriptionStartDate,
+  billingAnchorDay: readers.billingAnchorDay,
   outstandingBalance: readers.outstandingBalance,
   createdAt: readers.createdAt,
   centerId: readers.centerId,
@@ -172,8 +173,13 @@ async function insertReaderRow(
 export async function createReader(input: ReaderInput) {
   const user = await requireAppUser();
 
-  if (user.role === "au_poc" && !user.centerIds.includes(input.centerId)) {
-    throw new Error("You cannot add a reader to a Center outside your assignment.");
+  if (user.role === "au_poc") {
+    if (!user.permissions.canAddReaders) {
+      throw new Error("You don't have permission to add readers. Contact an Administrator.");
+    }
+    if (!user.centerIds.includes(input.centerId)) {
+      throw new Error("You cannot add a reader to a Center outside your assignment.");
+    }
   }
 
   return db.transaction((tx) => insertReaderRow(tx, user.id, input));
@@ -192,6 +198,9 @@ export type BulkCreateResult = {
 // in one transaction.
 export async function bulkCreateReaders(parsedRows: ParsedReaderRow[]): Promise<BulkCreateResult> {
   const user = await requireAppUser();
+  if (user.role === "au_poc" && !user.permissions.canAddReaders) {
+    throw new Error("You don't have permission to add readers. Contact an Administrator.");
+  }
   const availableCenters = await listAssignableCentersWithPocs();
 
   const errors: { row: number; reason: string }[] = [];
@@ -276,6 +285,14 @@ export async function transferReader(readerId: number, toCenterId: number, remar
     });
     await tx.update(readers).set({ centerId: toCenterId }).where(eq(readers.id, readerId));
   });
+}
+
+// Admin-only. anchorDay null reverts the reader to calendar-month billing;
+// 2-28 sets a custom cycle (1 is disallowed since it's identical to the
+// calendar-month default — see lib/billing/calculate.ts's getBillingCycle).
+export async function updateReaderBillingAnchor(readerId: number, anchorDay: number | null) {
+  await requireAdmin();
+  await db.update(readers).set({ billingAnchorDay: anchorDay }).where(eq(readers.id, readerId));
 }
 
 export async function listTransfersForReader(readerId: number) {

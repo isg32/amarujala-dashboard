@@ -43,7 +43,11 @@ export default async function TransferReaderPage({
           <FieldGroup>
             <Field>
               <FieldLabel htmlFor="toCenterId">New Center</FieldLabel>
-              <Select name="toCenterId" required>
+              <Select
+                name="toCenterId"
+                required
+                items={Object.fromEntries(otherCenters.map((c) => [String(c.id), `${c.name} (${c.cityName})`]))}
+              >
                 <SelectTrigger id="toCenterId" className="w-full">
                   <SelectValue placeholder="Select a center" />
                 </SelectTrigger>

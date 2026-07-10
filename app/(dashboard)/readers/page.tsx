@@ -37,6 +37,7 @@ export default async function ReadersPage({
 
   const currentUser = await getCurrentAppUser();
   const isAdmin = currentUser?.role === "admin";
+  const canAddReaders = isAdmin || currentUser?.permissions.canAddReaders === true;
 
   const [readerRows, centers, units] = await Promise.all([
     listReaders({
@@ -68,12 +69,16 @@ export default async function ReadersPage({
               Export
             </Button>
           )}
-          <Button variant="outline" render={<Link href="/readers/bulk-upload" />} nativeButton={false}>
-            Bulk Upload
-          </Button>
-          <Button render={<Link href="/readers/new" />} nativeButton={false}>
-            Add Reader
-          </Button>
+          {canAddReaders && (
+            <>
+              <Button variant="outline" render={<Link href="/readers/bulk-upload" />} nativeButton={false}>
+                Bulk Upload
+              </Button>
+              <Button render={<Link href="/readers/new" />} nativeButton={false}>
+                Add Reader
+              </Button>
+            </>
+          )}
         </div>
       </div>
 
@@ -87,7 +92,11 @@ export default async function ReadersPage({
             {isAdmin && (
               <div className="flex flex-col gap-1.5">
                 <label htmlFor="unitId" className="text-sm font-medium">Unit</label>
-                <Select name="unitId" defaultValue={params.unitId || "any"}>
+                <Select
+                  name="unitId"
+                  defaultValue={params.unitId || "any"}
+                  items={{ any: "Any", ...Object.fromEntries(units.map((u) => [String(u.id), u.name])) }}
+                >
                   <SelectTrigger id="unitId" className="w-40">
                     <SelectValue />
                   </SelectTrigger>
@@ -106,7 +115,11 @@ export default async function ReadersPage({
             )}
             <div className="flex flex-col gap-1.5">
               <label htmlFor="centerId" className="text-sm font-medium">Center</label>
-              <Select name="centerId" defaultValue={params.centerId || "any"}>
+              <Select
+                name="centerId"
+                defaultValue={params.centerId || "any"}
+                items={{ any: "Any", ...Object.fromEntries(centers.map((c) => [String(c.id), c.name])) }}
+              >
                 <SelectTrigger id="centerId" className="w-48">
                   <SelectValue />
                 </SelectTrigger>
@@ -128,7 +141,11 @@ export default async function ReadersPage({
             </div>
             <div className="flex flex-col gap-1.5">
               <label htmlFor="status" className="text-sm font-medium">Status</label>
-              <Select name="status" defaultValue={params.status || "any"}>
+              <Select
+                name="status"
+                defaultValue={params.status || "any"}
+                items={{ any: "Any", active: "Active", inactive: "Inactive" }}
+              >
                 <SelectTrigger id="status" className="w-36">
                   <SelectValue />
                 </SelectTrigger>

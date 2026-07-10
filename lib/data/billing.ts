@@ -1,5 +1,5 @@
 import "server-only";
-import { and, desc, eq, gt, gte, ilike, lte, max, notInArray, or, sql } from "drizzle-orm";
+import { and, desc, eq, gt, gte, ilike, isNull, lte, max, notInArray, or, sql } from "drizzle-orm";
 import { requireAdmin, requireAppUser, type AppUser } from "@/lib/auth/session";
 import { db } from "@/lib/db";
 import {
@@ -15,7 +15,14 @@ import {
   readerBillingLedger,
 } from "@/lib/db/schema";
 import { assertCenterInScope } from "./readers";
-import { calculateMonthCharge, type PricePeriod, type AttendanceStatus } from "@/lib/billing/calculate";
+import {
+  calculateMonthCharge,
+  calculateCycleCharge,
+  getBillingCycle,
+  daysInMonth,
+  type PricePeriod,
+  type AttendanceStatus,
+} from "@/lib/billing/calculate";
 import { postLedgerEntry } from "@/lib/billing/ledger";
 
 async function getReaderBillingContext(readerId: number) {
@@ -25,6 +32,7 @@ async function getReaderBillingContext(readerId: number) {
       cityId: centers.cityId,
       unitId: cities.unitId,
       subscriptionStartDate: readers.subscriptionStartDate,
+      billingAnchorDay: readers.billingAnchorDay,
     })
     .from(readers)
     .innerJoin(centers, eq(readers.centerId, centers.id))
@@ -42,23 +50,46 @@ async function getCityPricingHistory(cityId: number): Promise<PricePeriod[]> {
   return rows.map((r) => ({ price: Number(r.price), effectiveFrom: r.effectiveFrom }));
 }
 
+type PricingOverrideRow = typeof pricingOverrides.$inferSelect;
+
+// Pure resolution over an already-fetched set of override rows (ongoing +
+// one-day-only) for one reader's Center/Unit context — shared by
+// getPriceOverridesFor (fetches its own rows, one reader) and closeMonth
+// (fetches once, resolves per reader in a loop) so the precedence logic
+// only lives in one place.
+function resolveOverridesForContext(rows: PricingOverrideRow[], centerId: number, unitId: number) {
+  const ongoing = rows.filter((r) => r.forDate == null);
+  const dated = rows.filter((r) => r.forDate != null);
+
+  const find = (list: PricingOverrideRow[], scope: "center" | "unit" | "global", scopeId: number | null) =>
+    list.find((r) => r.scope === scope && r.scopeId === scopeId);
+
+  const centerOverride = find(ongoing, "center", centerId)?.dailyPrice;
+  const unitOverride = find(ongoing, "unit", unitId)?.dailyPrice;
+  const globalDefault = find(ongoing, "global", null)?.dailyPrice;
+
+  const specialDayPrices: Record<string, number> = {};
+  for (const forDate of new Set(dated.map((r) => r.forDate!))) {
+    const dayRows = dated.filter((r) => r.forDate === forDate);
+    const winner = find(dayRows, "center", centerId) ?? find(dayRows, "unit", unitId) ?? find(dayRows, "global", null);
+    if (winner) specialDayPrices[forDate] = Number(winner.dailyPrice);
+  }
+
+  return {
+    centerOverride: centerOverride != null ? Number(centerOverride) : null,
+    unitOverride: unitOverride != null ? Number(unitOverride) : null,
+    globalDefault: globalDefault != null ? Number(globalDefault) : null,
+    specialDayPrices,
+  };
+}
+
 // "Day Rates" — see lib/db/schema.ts's pricingOverrides. Fetches every
 // active override once and resolves the Center/Unit/Global values for one
 // reader's context; cheap enough to call per-reader since this table stays
 // small (one row per configured override, not per reader).
 async function getPriceOverridesFor(centerId: number, unitId: number) {
   const rows = await db.select().from(pricingOverrides).where(eq(pricingOverrides.active, true));
-  const find = (scope: "center" | "unit" | "global", scopeId: number | null) =>
-    rows.find((r) => r.scope === scope && r.scopeId === scopeId);
-
-  const centerOverride = find("center", centerId)?.dailyPrice;
-  const unitOverride = find("unit", unitId)?.dailyPrice;
-  const globalDefault = find("global", null)?.dailyPrice;
-  return {
-    centerOverride: centerOverride != null ? Number(centerOverride) : null,
-    unitOverride: unitOverride != null ? Number(unitOverride) : null,
-    globalDefault: globalDefault != null ? Number(globalDefault) : null,
-  };
+  return resolveOverridesForContext(rows, centerId, unitId);
 }
 
 async function getAttendanceMap(
@@ -77,31 +108,47 @@ async function getAttendanceMap(
 
 // Live, provisional total for the current (still open) billing period —
 // recomputed on every read, never written to the ledger. Only the
-// month-close action below writes an immutable monthly_charge entry.
+// month-close / closeReaderCycle actions below write an immutable
+// monthly_charge entry. Readers with a custom billingAnchorDay get their
+// own [anchorDay .. anchorDay-1] cycle instead of the calendar month.
 export async function getCurrentMonthProvisional(readerId: number) {
   const user = await requireAppUser();
   const context = await getReaderBillingContext(readerId);
   assertCenterInScope(user, context.centerId);
 
-  const billingPeriod = new Date().toISOString().slice(0, 7);
-  const monthStart = `${billingPeriod}-01`;
   const today = new Date().toISOString().slice(0, 10);
+  const { cycleStart, cycleEnd, billingPeriod } = currentCycleFor(context.billingAnchorDay, today);
 
   const [pricingHistory, attendanceMap, overrides] = await Promise.all([
     getCityPricingHistory(context.cityId),
-    getAttendanceMap(readerId, monthStart, today),
+    getAttendanceMap(readerId, cycleStart, today),
     getPriceOverridesFor(context.centerId, context.unitId),
   ]);
 
-  const amount = calculateMonthCharge({
-    billingPeriod,
+  const amount = calculateCycleCharge({
+    cycleStart,
+    cycleEnd,
     subscriptionStartDate: context.subscriptionStartDate,
     attendance: attendanceMap,
     pricingHistory,
+    today,
     ...overrides,
   });
 
-  return { billingPeriod, amount };
+  return { billingPeriod, cycleStart, cycleEnd, amount };
+}
+
+// Shared by getCurrentMonthProvisional and closeReaderCycle: the currently
+// open cycle for a reader, calendar-month by default or anchor-day-based if
+// set. billingPeriod is the ledger's 'YYYY-MM' label — for anchor-day
+// readers this is the cycle's start month, not necessarily today's month.
+function currentCycleFor(anchorDay: number | null, referenceDate: string) {
+  if (anchorDay == null) {
+    const billingPeriod = referenceDate.slice(0, 7);
+    return { cycleStart: `${billingPeriod}-01`, cycleEnd: `${billingPeriod}-31`, billingPeriod };
+  }
+  const { cycleStart, cycleEnd } = getBillingCycle(anchorDay, referenceDate);
+  return { cycleStart, cycleEnd, billingPeriod: cycleStart.slice(0, 7) };
 }
 
 export async function listLedgerForReader(readerId: number) {
@@ -115,6 +162,7 @@ export async function listLedgerForReader(readerId: number) {
       entryType: readerBillingLedger.entryType,
       amount: readerBillingLedger.amount,
       billingPeriod: readerBillingLedger.billingPeriod,
+      entryDate: readerBillingLedger.entryDate,
       description: readerBillingLedger.description,
       createdAt: readerBillingLedger.createdAt,
     })
@@ -138,6 +186,8 @@ export async function closeMonth(billingPeriod: string): Promise<CloseMonthResul
   const user = await requireAdmin();
 
   const monthEnd = billingPeriod + "-31"; // loose upper bound, date comparisons below don't need exactness
+  const [closeYear, closeMonthNum] = billingPeriod.split("-").map(Number);
+  const realMonthEnd = `${billingPeriod}-${String(daysInMonth(closeYear, closeMonthNum)).padStart(2, "0")}`;
   const alreadyCharged = await db
     .select({ readerId: readerBillingLedger.readerId })
     .from(readerBillingLedger)
@@ -157,6 +207,9 @@ export async function closeMonth(billingPeriod: string): Promise<CloseMonthResul
     .innerJoin(cities, eq(centers.cityId, cities.id))
     .where(
       and(
+        // Readers on a custom billing-cycle anchor day close individually
+        // via closeReaderCycle(), not through this org-wide calendar-month run.
+        isNull(readers.billingAnchorDay),
         lte(readers.subscriptionStartDate, monthEnd),
         alreadyChargedIds.length > 0 ? notInArray(readers.id, alreadyChargedIds) : undefined
       )
@@ -167,8 +220,6 @@ export async function closeMonth(billingPeriod: string): Promise<CloseMonthResul
     await Promise.all(cityIds.map(async (cityId) => [cityId, await getCityPricingHistory(cityId)] as const))
   );
   const overrideRows = await db.select().from(pricingOverrides).where(eq(pricingOverrides.active, true));
-  const globalDefaultRow = overrideRows.find((r) => r.scope === "global");
-  const globalDefault = globalDefaultRow ? Number(globalDefaultRow.dailyPrice) : null;
 
   const monthStart = `${billingPeriod}-01`;
   let chargedCount = 0;
@@ -176,17 +227,14 @@ export async function closeMonth(billingPeriod: string): Promise<CloseMonthResul
   await db.transaction(async (tx) => {
     for (const reader of eligibleReaders) {
       const attendanceMap = await getAttendanceMap(reader.id, monthStart, monthEnd);
-      const centerOverrideRow = overrideRows.find((r) => r.scope === "center" && r.scopeId === reader.centerId);
-      const unitOverrideRow = overrideRows.find((r) => r.scope === "unit" && r.scopeId === reader.unitId);
+      const overrides = resolveOverridesForContext(overrideRows, reader.centerId, reader.unitId);
       const amount = calculateMonthCharge({
         billingPeriod,
         subscriptionStartDate: reader.subscriptionStartDate,
         attendance: attendanceMap,
         pricingHistory: pricingByCityId.get(reader.cityId) ?? [],
         today: monthEnd, // force full-month billing regardless of when Close Month is actually clicked
-        centerOverride: centerOverrideRow ? Number(centerOverrideRow.dailyPrice) : null,
-        unitOverride: unitOverrideRow ? Number(unitOverrideRow.dailyPrice) : null,
-        globalDefault,
+        ...overrides,
       });
       // Always post, even for a $0 charge: this is what makes the period
       // "closed" for this reader (backs the idempotency check above) and
@@ -197,6 +245,7 @@ export async function closeMonth(billingPeriod: string): Promise<CloseMonthResul
           entryType: "monthly_charge",
           amount,
           billingPeriod,
+          entryDate: realMonthEnd,
           description: `Month close ${billingPeriod}`,
           createdBy: user.id,
         },
@@ -207,6 +256,78 @@ export async function closeMonth(billingPeriod: string): Promise<CloseMonthResul
   });
 
   return { billingPeriod, chargedCount, skippedAlreadyClosedCount: alreadyChargedIds.length };
+}
+
+export interface CloseReaderCycleResult {
+  billingPeriod: string;
+  cycleStart: string;
+  cycleEnd: string;
+  amount: number;
+  alreadyClosed: boolean;
+}
+
+// Admin-triggered, per-reader equivalent of closeMonth() for a reader on a
+// custom billingAnchorDay — since each such reader's cycle boundary is a
+// different date, there's no single shared "period" to close them all at
+// once the way the calendar-month readers have. Closes the most recently
+// *completed* cycle (the one immediately before the currently open one).
+// Idempotent per (reader, billingPeriod) via the same ledger unique index
+// closeMonth relies on.
+export async function closeReaderCycle(readerId: number): Promise<CloseReaderCycleResult> {
+  const user = await requireAdmin();
+  const context = await getReaderBillingContext(readerId);
+  if (context.billingAnchorDay == null) {
+    throw new Error("This reader bills on the calendar month — use Close Month instead.");
+  }
+
+  const today = new Date().toISOString().slice(0, 10);
+  const currentCycle = getBillingCycle(context.billingAnchorDay, today);
+  const dayBeforeCurrentCycle = new Date(currentCycle.cycleStart + "T00:00:00Z");
+  dayBeforeCurrentCycle.setUTCDate(dayBeforeCurrentCycle.getUTCDate() - 1);
+  const referenceDate = dayBeforeCurrentCycle.toISOString().slice(0, 10);
+
+  const { cycleStart, cycleEnd } = getBillingCycle(context.billingAnchorDay, referenceDate);
+  const billingPeriod = cycleStart.slice(0, 7);
+
+  const [existing] = await db
+    .select({ id: readerBillingLedger.id })
+    .from(readerBillingLedger)
+    .where(
+      and(
+        eq(readerBillingLedger.readerId, readerId),
+        eq(readerBillingLedger.entryType, "monthly_charge"),
+        eq(readerBillingLedger.billingPeriod, billingPeriod)
+      )
+    );
+  if (existing) return { billingPeriod, cycleStart, cycleEnd, amount: 0, alreadyClosed: true };
+
+  const [pricingHistory, attendanceMap, overrides] = await Promise.all([
+    getCityPricingHistory(context.cityId),
+    getAttendanceMap(readerId, cycleStart, cycleEnd),
+    getPriceOverridesFor(context.centerId, context.unitId),
+  ]);
+
+  const amount = calculateCycleCharge({
+    cycleStart,
+    cycleEnd,
+    subscriptionStartDate: context.subscriptionStartDate,
+    attendance: attendanceMap,
+    pricingHistory,
+    today: cycleEnd, // force the full completed cycle regardless of when this is clicked
+    ...overrides,
+  });
+
+  await postLedgerEntry({
+    readerId,
+    entryType: "monthly_charge",
+    amount,
+    billingPeriod,
+    entryDate: cycleEnd,
+    description: `Cycle close ${cycleStart} – ${cycleEnd}`,
+    createdBy: user.id,
+  });
+
+  return { billingPeriod, cycleStart, cycleEnd, amount, alreadyClosed: false };
 }
 
 function scopeToCenters(user: AppUser) {

@@ -1,20 +1,20 @@
 import { requireAdmin } from "@/lib/auth/session";
 import { listUnits, listZones } from "@/lib/data/master-data";
-import { createUnitAction, deleteUnitAction } from "../actions";
+import { createUnitAction } from "../actions";
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
-import { Table, TableHeader, TableRow, TableHead, TableBody, TableCell } from "@/components/ui/table";
+import { Table, TableHeader, TableRow, TableHead, TableBody } from "@/components/ui/table";
 import { Field, FieldLabel, FieldGroup } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem, SelectGroup } from "@/components/ui/select";
-import { DeleteButton } from "../delete-button";
+import { UnitRow } from "./unit-row";
 
 export default async function UnitsPage() {
   await requireAdmin();
   const [units, zones] = await Promise.all([listUnits(), listZones()]);
 
   return (
-    <div className="flex flex-col gap-6 max-w-2xl">
+    <div className="flex flex-col gap-6 overflow-x-auto">
       <Card>
         <CardHeader>
           <CardTitle>Add Unit</CardTitle>
@@ -27,7 +27,11 @@ export default async function UnitsPage() {
               <FieldGroup className="flex-1">
                 <Field>
                   <FieldLabel htmlFor="zoneId">Zone</FieldLabel>
-                  <Select name="zoneId" required>
+                  <Select
+                    name="zoneId"
+                    required
+                    items={Object.fromEntries(zones.map((z) => [String(z.id), z.name]))}
+                  >
                     <SelectTrigger id="zoneId" className="w-full">
                       <SelectValue placeholder="Select a zone" />
                     </SelectTrigger>
@@ -68,16 +72,7 @@ export default async function UnitsPage() {
             </TableHeader>
             <TableBody>
               {units.map((unit) => (
-                <TableRow key={unit.id}>
-                  <TableCell>{unit.name}</TableCell>
-                  <TableCell>{unit.zoneName}</TableCell>
-                  <TableCell className="text-right">
-                    <DeleteButton
-                      action={deleteUnitAction.bind(null, unit.id)}
-                      confirmMessage={`Delete unit "${unit.name}"?`}
-                    />
-                  </TableCell>
-                </TableRow>
+                <UnitRow key={unit.id} unit={unit} zones={zones} />
               ))}
             </TableBody>
           </Table>

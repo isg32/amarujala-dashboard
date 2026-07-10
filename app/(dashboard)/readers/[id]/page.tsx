@@ -14,7 +14,9 @@ import { ReversePaymentButton } from "../../payments/reverse-payment-button";
 import { SendPaymentLinkButton } from "../../payments/send-payment-link-button";
 import { AttendanceCalendar } from "./attendance-calendar";
 import { ApplyCouponForm } from "../../coupons/apply-coupon-form";
-import { sendPaymentReminderAction } from "./reminder-actions";
+import { SendReminderButton } from "./send-reminder-button";
+import { BillingCycleForm } from "./billing-cycle-form";
+import { CloseReaderCycleButton } from "./close-reader-cycle-button";
 
 const LEDGER_LABELS: Record<string, string> = {
   monthly_charge: "Monthly Charge",
@@ -56,7 +58,7 @@ export default async function ReaderProfilePage({
     ]);
 
   return (
-    <div className="flex flex-col gap-6 max-w-2xl">
+    <div className="flex flex-col gap-6 overflow-x-auto">
       <Card>
         <CardHeader className="flex items-start justify-between">
           <div>
@@ -67,13 +69,14 @@ export default async function ReaderProfilePage({
             <p className="text-sm text-muted-foreground">{reader.readerCode}</p>
           </div>
           <div className="flex gap-2">
-            <form action={sendPaymentReminderAction}>
-              <input type="hidden" name="readerId" value={reader.id} />
-              <Button type="submit" variant="outline" size="sm">
-                Send Payment Reminder
-              </Button>
-            </form>
-            {isAdmin && <SendPaymentLinkButton readerId={reader.id} coupons={availableCoupons} />}
+            {!currentUser?.suspended && <SendReminderButton readerId={reader.id} />}
+            {isAdmin && (
+              <SendPaymentLinkButton
+                readerId={reader.id}
+                outstandingBalance={reader.outstandingBalance}
+                coupons={availableCoupons}
+              />
+            )}
             {isAdmin && (
               <Button
                 variant="outline"
@@ -135,9 +138,16 @@ export default async function ReaderProfilePage({
         <CardHeader>
           <CardTitle>Billing</CardTitle>
           <p className="text-sm text-muted-foreground">
-            Current month ({provisional.billingPeriod}, provisional): ₹{provisional.amount.toFixed(2)}
+            Current cycle ({provisional.cycleStart} – {provisional.cycleEnd}, provisional): ₹
+            {provisional.amount.toFixed(2)}
           </p>
         </CardHeader>
+        {isAdmin && (
+          <CardContent className="flex flex-wrap items-center justify-between gap-3 border-b pb-4 text-sm">
+            <BillingCycleForm readerId={reader.id} billingAnchorDay={reader.billingAnchorDay} />
+            {reader.billingAnchorDay != null && <CloseReaderCycleButton readerId={reader.id} />}
+          </CardContent>
+        )}
         <CardContent>
           {ledgerRows.length === 0 ? (
             <p className="text-sm text-muted-foreground">No billing history yet.</p>
@@ -148,7 +158,8 @@ export default async function ReaderProfilePage({
                   <div>
                     <div>{LEDGER_LABELS[entry.entryType] ?? entry.entryType}</div>
                     <div className="text-xs text-muted-foreground">
-                      {entry.billingPeriod ?? entry.createdAt.toISOString().slice(0, 10)}
+                      {entry.entryDate}
+                      {entry.billingPeriod ? ` (${entry.billingPeriod})` : ""}
                       {entry.description ? ` — ${entry.description}` : ""}
                     </div>
                   </div>
@@ -165,7 +176,7 @@ export default async function ReaderProfilePage({
           <CardTitle>Payments</CardTitle>
         </CardHeader>
         <CardContent className="flex flex-col gap-4">
-          <RecordPaymentForm readerId={reader.id} />
+          {(isAdmin || currentUser?.permissions.canRecordPayments) && <RecordPaymentForm readerId={reader.id} />}
           {paymentRows.length > 0 && (
             <div className="flex flex-col gap-2 text-sm">
               {paymentRows.map((p) => (

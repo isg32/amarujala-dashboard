@@ -32,7 +32,12 @@ export function RecordPaymentForm({ readerId }: { readerId: number }) {
         </Field>
         <Field>
           <FieldLabel htmlFor="method">Method</FieldLabel>
-          <Select name="method" value={method} onValueChange={(v) => setMethod(typeof v === "string" ? v : "cash")}>
+          <Select
+            name="method"
+            value={method}
+            onValueChange={(v) => setMethod(typeof v === "string" ? v : "cash")}
+            items={{ cash: "Cash", upi: "UPI", bank_transfer: "Bank Transfer", razorpay: "Razorpay", other: "Other" }}
+          >
             <SelectTrigger id="method" className="w-full">
               <SelectValue />
             </SelectTrigger>

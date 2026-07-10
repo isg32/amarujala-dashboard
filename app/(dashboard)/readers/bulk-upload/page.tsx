@@ -8,7 +8,7 @@ export const maxDuration = 60;
 
 export default function BulkUploadPage() {
   return (
-    <Card className="max-w-2xl">
+    <Card>
       <CardHeader>
         <CardTitle>Bulk Reader Upload</CardTitle>
         <CardDescription>

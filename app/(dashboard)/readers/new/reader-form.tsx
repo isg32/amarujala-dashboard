@@ -46,6 +46,7 @@ export function ReaderForm({ centers }: { centers: Center[] }) {
             required
             value={centerId}
             onValueChange={(v) => setCenterId(typeof v === "string" ? v : "")}
+            items={Object.fromEntries(centers.map((c) => [String(c.id), `${c.name} (${c.cityName})`]))}
           >
             <SelectTrigger id="centerId" className="w-full">
               <SelectValue placeholder="Select a center" />
@@ -63,7 +64,11 @@ export function ReaderForm({ centers }: { centers: Center[] }) {
         </Field>
         <Field>
           <FieldLabel htmlFor="assignedPocId">Assigned POC (optional)</FieldLabel>
-          <Select name="assignedPocId" disabled={pocOptions.length === 0}>
+          <Select
+            name="assignedPocId"
+            disabled={pocOptions.length === 0}
+            items={Object.fromEntries(pocOptions.map((poc) => [poc.id, poc.name]))}
+          >
             <SelectTrigger id="assignedPocId" className="w-full">
               <SelectValue placeholder={pocOptions.length === 0 ? "No POC for this center" : "Select a POC"} />
             </SelectTrigger>

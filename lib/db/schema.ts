@@ -40,6 +40,8 @@ export const paymentIntentStatusEnum = pgEnum("payment_intent_status", [
   "success",
   "failed",
 ]);
+export const smsTemplateTypeEnum = pgEnum("sms_template_type", ["reminder", "payment_link"]);
+
 export const pricingOverrideScopeEnum = pgEnum("pricing_override_scope", [
   "global",
   "unit",
@@ -93,7 +95,40 @@ export const appUsers = pgTable("app_users", {
   name: text("name").notNull(),
   email: text("email").notNull(),
   role: appRoleEnum("role").notNull(),
+  // Login stays intact and every read stays scoped exactly as before — this
+  // only blocks writes (see lib/auth/session.ts's getCurrentAppUser, which
+  // forces every poc_permissions flag to false when this is set, and the
+  // explicit check in app/(dashboard)/readers/[id]/reminder-actions.ts for
+  // the one write path that isn't gated by a permissions flag). A softer
+  // alternative to deletePoc for "this person shouldn't act right now but
+  // keep their history/access intact."
+  suspended: boolean("suspended").notNull().default(false),
   createdAt: timestamp("created_at").notNull().defaultNow(),
+});
+
+// Per-POC write permissions, one row per au_poc user, created/updated only
+// when an admin actually customizes them — see lib/auth/session.ts's
+// getCurrentAppUser(), which treats a missing row as "all true" so every
+// POC created before this feature existed keeps its current full-write
+// access with no migration needed.
+export const pocPermissions = pgTable("poc_permissions", {
+  pocUserId: text("poc_user_id")
+    .primaryKey()
+    .references(() => appUsers.id),
+  canRecordPayments: boolean("can_record_payments").notNull().default(true),
+  canMarkAttendance: boolean("can_mark_attendance").notNull().default(true),
+  canAddReaders: boolean("can_add_readers").notNull().default(true),
+});
+
+// Admin-editable overrides for the two DLT-registered SMS templates (see
+// lib/sms/send-reminder.ts). A missing row = the original registered text
+// (DEFAULT_TEMPLATES there), same "missing row is the safe default" pattern
+// as poc_permissions above.
+export const smsTemplates = pgTable("sms_templates", {
+  type: smsTemplateTypeEnum("type").primaryKey(),
+  template: text("template").notNull(),
+  updatedAt: timestamp("updated_at").notNull().defaultNow(),
+  updatedBy: text("updated_by").references(() => appUsers.id),
 });
 
 export const pocCenters = pgTable(
@@ -133,6 +168,12 @@ export const pricingOverrides = pgTable("pricing_overrides", {
   scope: pricingOverrideScopeEnum("scope").notNull(),
   scopeId: integer("scope_id"),
   dailyPrice: numeric("daily_price", { precision: 10, scale: 2 }).notNull(),
+  // Null = ongoing override (the original "Day Rates" behavior). A specific
+  // date = a one-day-only price hike (e.g. a festival) that outranks even an
+  // ongoing Center/Unit override for that single date — see
+  // lib/billing/calculate.ts's resolveDailyRate() and
+  // lib/data/billing.ts's getPriceOverridesFor().
+  forDate: date("for_date"),
   active: boolean("active").notNull().default(true),
   createdBy: text("created_by")
     .notNull()
@@ -153,6 +194,12 @@ export const readers = pgTable("readers", {
     .references(() => centers.id),
   assignedPocId: text("assigned_poc_id").references(() => appUsers.id),
   subscriptionStartDate: date("subscription_start_date").notNull(),
+  // 1-28, null = calendar-month billing (the default). When set, this
+  // reader's billing cycle runs [anchorDay .. anchorDay-1 of next month]
+  // instead of the 1st-to-end-of-month everyone else uses — see
+  // lib/billing/calculate.ts's getBillingCycle() and
+  // lib/data/billing.ts's closeReaderCycle().
+  billingAnchorDay: integer("billing_anchor_day"),
   status: readerStatusEnum("status").notNull().default("active"),
   remarks: text("remarks"),
   outstandingBalance: numeric("outstanding_balance", { precision: 10, scale: 2 })
@@ -260,6 +307,11 @@ export const coupons = pgTable("coupons", {
   code: text("code").notNull().unique(),
   description: text("description"),
   discountAmount: numeric("discount_amount", { precision: 10, scale: 2 }).notNull(),
+  // Null = unlimited (the default, so every existing coupon keeps working
+  // unchanged). When set, this is the total ₹ this coupon can ever give away
+  // across all readers — applyCoupon() in lib/data/coupons.ts refuses once
+  // SUM(reader_coupons.applied_amount) for this coupon would exceed it.
+  totalBudget: numeric("total_budget", { precision: 10, scale: 2 }),
   active: boolean("active").notNull().default(true),
   createdBy: text("created_by")
     .notNull()
@@ -298,6 +350,12 @@ export const readerBillingLedger = pgTable(
     entryType: ledgerEntryTypeEnum("entry_type").notNull(),
     amount: numeric("amount", { precision: 10, scale: 2 }).notNull(),
     billingPeriod: char("billing_period", { length: 7 }), // 'YYYY-MM'
+    // The date this financial event actually happened (e.g. the payment
+    // date entered on the Record Payment form, which can be backdated) —
+    // distinct from createdAt below, which is when the row was written and
+    // can lag behind entryDate for a backdated entry. Defaults to today's
+    // date at the call site (lib/billing/ledger.ts) when not given.
+    entryDate: date("entry_date").notNull().defaultNow(),
     referenceId: integer("reference_id"),
     description: text("description"),
     createdBy: text("created_by").references(() => appUsers.id),

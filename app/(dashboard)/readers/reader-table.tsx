@@ -8,7 +8,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { bulkDeleteReadersAction } from "./actions";
-import { sendBulkPaymentLinksAction } from "../payments/actions";
+import { sendBulkPaymentLinksAction, type BulkSendResult } from "../payments/actions";
 
 type Reader = {
   id: number;
@@ -28,6 +28,7 @@ export function ReaderTable({ readers, isAdmin }: { readers: Reader[]; isAdmin: 
   const [selected, setSelected] = useState<Set<number>>(new Set());
   const [pending, startTransition] = useTransition();
   const [notice, setNotice] = useState<string | null>(null);
+  const [linkResult, setLinkResult] = useState<BulkSendResult | null>(null);
 
   const allSelected = readers.length > 0 && selected.size === readers.length;
 
@@ -57,9 +58,10 @@ export function ReaderTable({ readers, isAdmin }: { readers: Reader[]; isAdmin: 
 
   function runBulkPaymentLinks() {
     setNotice(null);
+    setLinkResult(null);
     startTransition(async () => {
       const result = await sendBulkPaymentLinksAction([...selected]);
-      setNotice(result.message);
+      setLinkResult(result);
       setSelected(new Set());
     });
   }
@@ -88,6 +90,21 @@ export function ReaderTable({ readers, isAdmin }: { readers: Reader[]; isAdmin: 
             Delete Readers{selected.size > 0 ? ` (${selected.size})` : ""}
           </Button>
           {notice && <span className="text-xs text-muted-foreground">{notice}</span>}
+        </div>
+      )}
+
+      {linkResult && (
+        <div className="flex flex-col gap-1 rounded-md border p-2 text-xs">
+          <span className={linkResult.failed > 0 ? "text-destructive" : "text-muted-foreground"}>{linkResult.message}</span>
+          {linkResult.failures.length > 0 && (
+            <ul className="flex flex-col gap-0.5 pl-4 text-muted-foreground">
+              {linkResult.failures.map((f) => (
+                <li key={f.readerId} className="list-disc">
+                  {f.readerName}: {f.reason}
+                </li>
+              ))}
+            </ul>
+          )}
         </div>
       )}
 

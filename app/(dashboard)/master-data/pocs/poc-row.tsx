@@ -11,7 +11,16 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { DeleteButton } from "../delete-button";
 
 type Center = { id: number; name: string; cityName: string };
-type Poc = { id: string; name: string; email: string; centers: { id: number; name: string }[] };
+type Poc = {
+  id: string;
+  name: string;
+  email: string;
+  centers: { id: number; name: string }[];
+  canRecordPayments: boolean;
+  canMarkAttendance: boolean;
+  canAddReaders: boolean;
+  suspended: boolean;
+};
 
 export function PocRow({ poc, allCenters }: { poc: Poc; allCenters: Center[] }) {
   const router = useRouter();
@@ -25,12 +34,21 @@ export function PocRow({ poc, allCenters }: { poc: Poc; allCenters: Center[] }) 
       <TableRow>
         <TableCell>{poc.name}</TableCell>
         <TableCell>{poc.email}</TableCell>
-        <TableCell className="flex flex-wrap gap-1">
-          {poc.centers.map((c) => (
-            <Badge key={c.id} variant="secondary">
-              {c.name}
-            </Badge>
-          ))}
+        <TableCell className="max-w-3xs whitespace-normal">
+          <div className="flex flex-wrap gap-1">
+            {poc.centers.map((c) => (
+              <Badge key={c.id} variant="secondary">
+                {c.name}
+              </Badge>
+            ))}
+            {poc.suspended ? (
+              <Badge variant="destructive">Suspended</Badge>
+            ) : (
+              (!poc.canRecordPayments || !poc.canMarkAttendance || !poc.canAddReaders) && (
+                <Badge variant="outline">Restricted</Badge>
+              )
+            )}
+          </div>
         </TableCell>
         <TableCell className="flex justify-end gap-2">
           <Button type="button" variant="outline" size="xs" onClick={() => setEditing(true)}>
@@ -93,6 +111,28 @@ export function PocRow({ poc, allCenters }: { poc: Poc; allCenters: Center[] }) 
               ))}
             </div>
           </div>
+          <div className="flex flex-col gap-1">
+            <span className="text-xs text-muted-foreground">Permissions</span>
+            <div className="flex flex-wrap gap-4">
+              <label className="flex items-center gap-2 text-sm">
+                <Checkbox name="canRecordPayments" defaultChecked={poc.canRecordPayments} />
+                Record payments
+              </label>
+              <label className="flex items-center gap-2 text-sm">
+                <Checkbox name="canMarkAttendance" defaultChecked={poc.canMarkAttendance} />
+                Mark attendance
+              </label>
+              <label className="flex items-center gap-2 text-sm">
+                <Checkbox name="canAddReaders" defaultChecked={poc.canAddReaders} />
+                Add readers
+              </label>
+            </div>
+          </div>
+          <label className="flex items-center gap-2 text-sm">
+            <Checkbox name="suspended" defaultChecked={poc.suspended} />
+            Suspended — can still sign in and view everything in their Centers, but can&apos;t record payments, mark
+            attendance, add readers, or send reminders
+          </label>
           <div className="flex items-center gap-3">
             <Button type="submit" size="sm" disabled={pending}>
               {pending ? "Saving..." : "Save"}

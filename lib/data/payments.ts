@@ -32,6 +32,9 @@ export interface RecordPaymentInput {
 // (negative — decreases what's owed) in one transaction.
 export async function recordPayment(input: RecordPaymentInput) {
   const user = await requireAppUser();
+  if (user.role === "au_poc" && !user.permissions.canRecordPayments) {
+    throw new Error("You don't have permission to record payments. Contact an Administrator.");
+  }
   const [reader] = await db.select({ centerId: readers.centerId }).from(readers).where(eq(readers.id, input.readerId));
   if (!reader) throw new Error("Reader not found.");
   assertCenterInScope(user, reader.centerId);
@@ -56,6 +59,7 @@ export async function recordPayment(input: RecordPaymentInput) {
         readerId: input.readerId,
         entryType: "payment",
         amount: -input.amount,
+        entryDate: input.paymentDate,
         referenceId: inserted.id,
         description: `Payment via ${input.method}`,
         createdBy: user.id,
@@ -96,17 +100,25 @@ export async function reversePayment(paymentId: number, reason?: string) {
 }
 
 // Admin-only, gated by PAYU_GATEWAY_ENABLED — see lib/payu/config.ts for why.
-// Creates a pending payment_intents row for the reader's current
-// outstanding balance and returns the public /pay URL a reader can open
-// unauthenticated to complete a real PayU transaction.
+// Creates a pending payment_intents row and returns the public /pay URL a
+// reader can open unauthenticated to complete a real PayU transaction. The
+// PayU webhook (markPaymentIntentResult) is what posts the ledger entry once
+// the reader actually pays, so the dashboard's outstanding balance reflects
+// it automatically on the reader's next page load — no separate sync step.
 //
-// An optional voucher (existing active coupon) discounts the balance before
-// the link amount is computed. Every check that can fail happens *before*
-// the voucher is applied — gateway disabled, reader not found, coupon
-// invalid, or the discount being large enough to leave nothing to collect —
-// so a failed send never leaves a coupon silently consumed with no link
-// actually sent.
-export async function createPaymentLink(readerId: number, voucherCouponId?: number) {
+// Defaults to the reader's exact outstanding balance, but an admin can
+// override that with any amount before sending (e.g. a negotiated partial
+// settlement) — amountOverride wins outright, applied after any voucher
+// discount. An optional voucher (existing active coupon) discounts the
+// balance before that. Every check that can fail happens *before* the
+// voucher is applied — gateway disabled, reader not found, coupon invalid,
+// or the discount being large enough to leave nothing to collect — so a
+// failed send never leaves a coupon silently consumed with no link actually
+// sent.
+export async function createPaymentLink(
+  readerId: number,
+  options: { voucherCouponId?: number; amountOverride?: number } = {}
+) {
   const user = await requireAdmin();
   if (!PAYU_GATEWAY_ENABLED) {
     throw new Error("PayU payments are disabled. Set PAYU_GATEWAY_ENABLED=true after testing the flow to go live.");
@@ -117,16 +129,21 @@ export async function createPaymentLink(readerId: number, voucherCouponId?: numb
 
   let balance = Number(reader.outstandingBalance);
 
-  if (voucherCouponId) {
-    const [coupon] = await db.select().from(coupons).where(eq(coupons.id, voucherCouponId));
+  if (options.voucherCouponId) {
+    const [coupon] = await db.select().from(coupons).where(eq(coupons.id, options.voucherCouponId));
     if (!coupon || !coupon.active) throw new Error("Voucher not found or inactive.");
     const discountAmount = Number(coupon.discountAmount);
     if (discountAmount >= balance) {
       throw new Error(`This voucher (₹${discountAmount}) would leave nothing to collect on a ₹${balance} balance.`);
     }
 
-    await applyCoupon(readerId, voucherCouponId, "Applied to payment link");
+    await applyCoupon(readerId, options.voucherCouponId, "Applied to payment link");
     balance -= discountAmount;
+  }
+
+  if (options.amountOverride != null) {
+    if (options.amountOverride <= 0) throw new Error("The payment link amount must be greater than zero.");
+    balance = options.amountOverride;
   }
 
   if (balance <= 0) throw new Error("This reader has no outstanding balance to collect.");
@@ -173,6 +190,8 @@ export async function markPaymentIntentResult(
   }
 
   await db.transaction(async (tx) => {
+    const paymentDate = new Date().toISOString().slice(0, 10);
+
     await tx
       .update(paymentIntents)
       .set({ status: "success", paidAt: new Date() })
@@ -185,7 +204,7 @@ export async function markPaymentIntentResult(
         amount: intent.amount,
         method: "payu",
         transactionReference: txnId,
-        paymentDate: new Date().toISOString().slice(0, 10),
+        paymentDate,
         recordedBy: intent.createdBy,
       })
       .returning({ id: payments.id });
@@ -195,6 +214,7 @@ export async function markPaymentIntentResult(
         readerId: intent.readerId,
         entryType: "payment",
         amount: -(recordPaymentAmount ?? Number(intent.amount)),
+        entryDate: paymentDate,
         referenceId: payment.id,
         description: `PayU payment (txn ${txnId})`,
         createdBy: intent.createdBy,
@@ -261,4 +281,71 @@ export async function listPaymentTransactions(filters: PaymentTransactionFilters
     .innerJoin(cities, eq(centers.cityId, cities.id))
     .where(and(...conditions))
     .orderBy(desc(payments.paymentDate), desc(payments.id));
+}
+
+export type PaymentIntentFilters = {
+  search?: string;
+  status?: "pending" | "success" | "failed";
+  centerId?: number;
+};
+
+// Admin-only view of payment_intents — the links actually sent to readers
+// (via createPaymentLink), independent of whether they were ever paid.
+// "paid" (status success) rows carry a `payment` object with the resulting
+// payments.id so the UI can offer Reverse the same way the /payments page
+// does for any other payment.
+export async function listPaymentIntents(filters: PaymentIntentFilters = {}) {
+  await requireAdmin();
+
+  const conditions = [];
+  if (filters.search) {
+    const term = `%${filters.search}%`;
+    conditions.push(or(ilike(readers.name, term), ilike(readers.mobile, term), ilike(readers.readerCode, term)));
+  }
+  if (filters.status) conditions.push(eq(paymentIntents.status, filters.status));
+  if (filters.centerId) conditions.push(eq(readers.centerId, filters.centerId));
+
+  const rows = await db
+    .select({
+      id: paymentIntents.id,
+      txnId: paymentIntents.txnId,
+      amount: paymentIntents.amount,
+      status: paymentIntents.status,
+      createdAt: paymentIntents.createdAt,
+      paidAt: paymentIntents.paidAt,
+      readerId: readers.id,
+      readerName: readers.name,
+      readerCode: readers.readerCode,
+      centerName: centers.name,
+    })
+    .from(paymentIntents)
+    .innerJoin(readers, eq(paymentIntents.readerId, readers.id))
+    .innerJoin(centers, eq(readers.centerId, centers.id))
+    .where(conditions.length > 0 ? and(...conditions) : undefined)
+    .orderBy(desc(paymentIntents.createdAt));
+
+  const successTxnIds = rows.filter((r) => r.status === "success").map((r) => r.txnId);
+  const paymentRows =
+    successTxnIds.length > 0
+      ? await db
+          .select({ id: payments.id, transactionReference: payments.transactionReference, reversed: payments.reversed })
+          .from(payments)
+          .where(inArray(payments.transactionReference, successTxnIds))
+      : [];
+  const paymentByTxnId = new Map(paymentRows.map((p) => [p.transactionReference, { id: p.id, reversed: p.reversed }]));
+
+  return rows.map((r) => ({ ...r, payment: paymentByTxnId.get(r.txnId) ?? null }));
+}
+
+// For a stale/abandoned link (reader never paid) — lets an admin stop
+// treating it as outstanding. No ledger effect: nothing was ever posted for
+// a pending intent, so there's nothing to reverse, just a status flip.
+export async function markPaymentIntentFailed(intentId: number) {
+  await requireAdmin();
+  const [intent] = await db.select().from(paymentIntents).where(eq(paymentIntents.id, intentId));
+  if (!intent) throw new Error("Payment link not found.");
+  if (intent.status !== "pending") {
+    throw new Error("Only a pending (unpaid) link can be marked failed.");
+  }
+  await db.update(paymentIntents).set({ status: "failed" }).where(eq(paymentIntents.id, intentId));
 }

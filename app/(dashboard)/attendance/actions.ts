@@ -48,6 +48,7 @@ export async function toggleAttendanceAction(
     statusSchema.parse(status);
     await markAttendanceForReader({ readerId, dateFrom: date, dateTo: date, status });
     revalidatePath(`/readers/${readerId}`);
+    revalidatePath("/attendance");
   } catch (e) {
     return { error: e instanceof Error ? e.message : "Failed to update attendance." };
   }

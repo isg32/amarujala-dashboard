@@ -14,6 +14,7 @@ type Override = {
   scope: "global" | "unit" | "center";
   scopeLabel: string;
   dailyPrice: string;
+  forDate: string | null;
   active: boolean;
 };
 
@@ -29,6 +30,7 @@ export function PricingOverrideRow({ override }: { override: Override }) {
         <TableCell className="capitalize">{override.scope}</TableCell>
         <TableCell>{override.scopeLabel}</TableCell>
         <TableCell>₹{override.dailyPrice}</TableCell>
+        <TableCell>{override.forDate ?? "Ongoing"}</TableCell>
         <TableCell>{override.active ? "Yes" : "No"}</TableCell>
         <TableCell className="flex justify-end gap-2">
           <Button type="button" variant="outline" size="xs" onClick={() => setEditing(true)}>
@@ -45,7 +47,7 @@ export function PricingOverrideRow({ override }: { override: Override }) {
 
   return (
     <TableRow>
-      <TableCell colSpan={5}>
+      <TableCell colSpan={6}>
         <form
           action={async (formData) => {
             setPending(true);
@@ -62,7 +64,9 @@ export function PricingOverrideRow({ override }: { override: Override }) {
         >
           <input type="hidden" name="id" value={override.id} />
           <div className="flex flex-col gap-1">
-            <span className="text-xs text-muted-foreground">{override.scope} — {override.scopeLabel}</span>
+            <span className="text-xs text-muted-foreground">
+              {override.scope} — {override.scopeLabel} — {override.forDate ?? "Ongoing"}
+            </span>
           </div>
           <div className="flex flex-col gap-1">
             <label className="text-xs text-muted-foreground" htmlFor={`dailyPrice-${override.id}`}>

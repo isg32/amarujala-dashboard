@@ -110,7 +110,9 @@ export async function getDashboardKpis() {
   };
 }
 
-export async function getPaymentDueReport() {
+export type ReportCenterFilter = { centerId?: number };
+
+export async function getPaymentDueReport(filters: ReportCenterFilter = {}) {
   const user = await requireAppUser();
   const scope = scopeCondition(user);
 
@@ -127,11 +129,17 @@ export async function getPaymentDueReport() {
     .from(readers)
     .innerJoin(centers, eq(readers.centerId, centers.id))
     .innerJoin(cities, eq(centers.cityId, cities.id))
-    .where(and(scope, sqlOp`${readers.outstandingBalance} > 0`))
+    .where(
+      and(
+        scope,
+        sqlOp`${readers.outstandingBalance} > 0`,
+        filters.centerId ? eq(readers.centerId, filters.centerId) : undefined
+      )
+    )
     .orderBy(sqlOp`${readers.outstandingBalance} desc`);
 }
 
-export async function getAttendanceReport(dateFrom: string, dateTo: string) {
+export async function getAttendanceReport(dateFrom: string, dateTo: string, filters: ReportCenterFilter = {}) {
   const user = await requireAppUser();
   const scope = scopeCondition(user);
 
@@ -147,7 +155,14 @@ export async function getAttendanceReport(dateFrom: string, dateTo: string) {
     .from(attendance)
     .innerJoin(readers, eq(attendance.readerId, readers.id))
     .innerJoin(centers, eq(readers.centerId, centers.id))
-    .where(and(scope, gte(attendance.attendanceDate, dateFrom), sqlOp`${attendance.attendanceDate} <= ${dateTo}`))
+    .where(
+      and(
+        scope,
+        gte(attendance.attendanceDate, dateFrom),
+        sqlOp`${attendance.attendanceDate} <= ${dateTo}`,
+        filters.centerId ? eq(readers.centerId, filters.centerId) : undefined
+      )
+    )
     .groupBy(readers.id, readers.readerCode, readers.name, centers.name)
     .orderBy(readers.name);
 }
@@ -157,10 +172,11 @@ type GroupBy = "city" | "center" | "poc";
 // Two separate grouped queries merged by label, rather than one query
 // joining both readers and payments — joining payments would fan out the
 // reader rows and inflate the outstanding-balance sum.
-export async function getGroupedReport(groupBy: GroupBy) {
+export async function getGroupedReport(groupBy: GroupBy, filters: ReportCenterFilter = {}) {
   const user = await requireAppUser();
   const scope = scopeCondition(user);
   const label = groupBy === "city" ? cities.name : groupBy === "center" ? centers.name : appUsers.name;
+  const centerFilter = filters.centerId ? eq(readers.centerId, filters.centerId) : undefined;
 
   const readerStatsQuery = db
     .select({
@@ -172,7 +188,7 @@ export async function getGroupedReport(groupBy: GroupBy) {
     .innerJoin(centers, eq(readers.centerId, centers.id))
     .innerJoin(cities, eq(centers.cityId, cities.id))
     .leftJoin(appUsers, eq(readers.assignedPocId, appUsers.id))
-    .where(scope)
+    .where(and(scope, centerFilter))
     .groupBy(label);
 
   const collectionsQuery = db
@@ -185,7 +201,7 @@ export async function getGroupedReport(groupBy: GroupBy) {
     .innerJoin(centers, eq(readers.centerId, centers.id))
     .innerJoin(cities, eq(centers.cityId, cities.id))
     .leftJoin(appUsers, eq(readers.assignedPocId, appUsers.id))
-    .where(scope)
+    .where(and(scope, centerFilter))
     .groupBy(label);
 
   const [readerStats, collections] = await Promise.all([readerStatsQuery, collectionsQuery]);
@@ -203,7 +219,7 @@ export async function getGroupedReport(groupBy: GroupBy) {
 // (created_at, not billing_period — payments/discounts aren't tagged with a
 // billing_period, only monthly_charge entries are, so grouping by when the
 // activity actually happened is what makes this a true monthly summary).
-export async function getMonthlySummaryReport() {
+export async function getMonthlySummaryReport(filters: ReportCenterFilter = {}) {
   const user = await requireAppUser();
   const scope = scopeCondition(user);
 
@@ -215,7 +231,7 @@ export async function getMonthlySummaryReport() {
     })
     .from(readerBillingLedger)
     .innerJoin(readers, eq(readerBillingLedger.readerId, readers.id))
-    .where(scope)
+    .where(and(scope, filters.centerId ? eq(readers.centerId, filters.centerId) : undefined))
     .groupBy(sqlOp`to_char(${readerBillingLedger.createdAt}, 'YYYY-MM')`, readerBillingLedger.entryType);
 
   const byMonth = new Map<string, { charges: number; payments: number; discounts: number }>();

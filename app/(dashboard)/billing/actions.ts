@@ -2,7 +2,7 @@
 
 import { z } from "zod";
 import { revalidatePath } from "next/cache";
-import { closeMonth } from "@/lib/data/billing";
+import { closeMonth, closeReaderCycle } from "@/lib/data/billing";
 
 export type CloseMonthState = { message: string } | { error: string } | null;
 
@@ -23,5 +23,19 @@ export async function closeMonthAction(
     return { message: `Closed ${result.billingPeriod}: charged ${result.chargedCount} reader(s)${skipped}.` };
   } catch (e) {
     return { error: e instanceof Error ? e.message : "Failed to close month." };
+  }
+}
+
+export async function closeReaderCycleAction(readerId: number): Promise<{ error: string } | { message: string }> {
+  try {
+    const result = await closeReaderCycle(readerId);
+    revalidatePath(`/readers/${readerId}`);
+    revalidatePath("/billing");
+    if (result.alreadyClosed) {
+      return { message: `Cycle ${result.cycleStart} – ${result.cycleEnd} was already closed.` };
+    }
+    return { message: `Closed cycle ${result.cycleStart} – ${result.cycleEnd}: charged ₹${result.amount.toFixed(2)}.` };
+  } catch (e) {
+    return { error: e instanceof Error ? e.message : "Failed to close cycle." };
   }
 }

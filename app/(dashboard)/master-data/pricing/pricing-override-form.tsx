@@ -33,7 +33,12 @@ export function PricingOverrideForm({ units, centers }: { units: Option[]; cente
       <FieldGroup>
         <Field>
           <FieldLabel htmlFor="scope">Scope</FieldLabel>
-          <Select name="scope" value={scope} onValueChange={(v) => setScope((v as typeof scope) ?? "unit")}>
+          <Select
+            name="scope"
+            value={scope}
+            onValueChange={(v) => setScope((v as typeof scope) ?? "unit")}
+            items={{ global: "Global (org-wide default)", unit: "Unit", center: "Center" }}
+          >
             <SelectTrigger id="scope" className="w-full">
               <SelectValue />
             </SelectTrigger>
@@ -49,7 +54,11 @@ export function PricingOverrideForm({ units, centers }: { units: Option[]; cente
         {scope !== "global" && (
           <Field>
             <FieldLabel htmlFor="scopeId">{scope === "unit" ? "Unit" : "Center"}</FieldLabel>
-            <Select name="scopeId" required>
+            <Select
+              name="scopeId"
+              required
+              items={Object.fromEntries(options.map((o) => [String(o.id), o.name]))}
+            >
               <SelectTrigger id="scopeId" className="w-full">
                 <SelectValue placeholder={`Select a ${scope}`} />
               </SelectTrigger>
@@ -68,6 +77,14 @@ export function PricingOverrideForm({ units, centers }: { units: Option[]; cente
         <Field>
           <FieldLabel htmlFor="dailyPrice">Daily price (₹)</FieldLabel>
           <Input id="dailyPrice" name="dailyPrice" type="number" step="0.01" min="0.01" required />
+        </Field>
+        <Field>
+          <FieldLabel htmlFor="forDate">Festival / one-day only (optional)</FieldLabel>
+          <Input id="forDate" name="forDate" type="date" />
+          <p className="text-xs text-muted-foreground">
+            Leave blank for an ongoing Day Rate. Set a date for a one-time price hike (e.g. Diwali) that applies only
+            on that day, overriding even an ongoing Center/Unit rate.
+          </p>
         </Field>
       </FieldGroup>
       <Button type="submit" className="self-start" disabled={pending}>

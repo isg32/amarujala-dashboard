@@ -1,15 +1,15 @@
 import { requireAdmin } from "@/lib/auth/session";
 import { listCityPricing, listCities, listUnits, listCenters, listPricingOverrides } from "@/lib/data/master-data";
-import { setCityPriceAction, deleteCityPricingAction } from "../actions";
+import { setCityPriceAction } from "../actions";
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from "@/components/ui/card";
 import { Table, TableHeader, TableRow, TableHead, TableBody, TableCell } from "@/components/ui/table";
 import { Field, FieldLabel, FieldGroup } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem, SelectGroup } from "@/components/ui/select";
-import { DeleteButton } from "../delete-button";
 import { PricingOverrideForm } from "./pricing-override-form";
 import { PricingOverrideRow } from "./pricing-override-row";
+import { CityPricingRow } from "./city-pricing-row";
 
 export default async function PricingPage() {
   await requireAdmin();
@@ -22,7 +22,7 @@ export default async function PricingPage() {
   ]);
 
   return (
-    <div className="flex flex-col gap-6 max-w-2xl">
+    <div className="flex flex-col gap-6 overflow-x-auto">
       <Card>
         <CardHeader>
           <CardTitle>Set City Price</CardTitle>
@@ -35,7 +35,11 @@ export default async function PricingPage() {
               <FieldGroup>
                 <Field>
                   <FieldLabel htmlFor="cityId">City</FieldLabel>
-                  <Select name="cityId" required>
+                  <Select
+                    name="cityId"
+                    required
+                    items={Object.fromEntries(cities.map((c) => [String(c.id), c.name]))}
+                  >
                     <SelectTrigger id="cityId" className="w-full">
                       <SelectValue placeholder="Select a city" />
                     </SelectTrigger>
@@ -81,17 +85,7 @@ export default async function PricingPage() {
             </TableHeader>
             <TableBody>
               {pricing.map((row) => (
-                <TableRow key={row.id}>
-                  <TableCell>{row.cityName}</TableCell>
-                  <TableCell>₹{row.price}</TableCell>
-                  <TableCell>{row.effectiveFrom}</TableCell>
-                  <TableCell className="text-right">
-                    <DeleteButton
-                      action={deleteCityPricingAction.bind(null, row.id)}
-                      confirmMessage={`Delete this ₹${row.price} price entry for ${row.cityName}? Past billing already computed with it is unaffected.`}
-                    />
-                  </TableCell>
-                </TableRow>
+                <CityPricingRow key={row.id} row={row} />
               ))}
             </TableBody>
           </Table>
@@ -103,7 +97,9 @@ export default async function PricingPage() {
           <CardTitle>Day Rates</CardTitle>
           <CardDescription>
             Flat per-day price overrides by Unit, Center, or organization-wide default — take priority over city
-            pricing above wherever they apply. A Center override wins over a Unit override.
+            pricing above wherever they apply. A Center override wins over a Unit override. Set a specific date for a
+            one-day-only hike (e.g. a festival) instead of an ongoing rate — that wins over everything else for that
+            single day.
           </CardDescription>
         </CardHeader>
         <CardContent>
@@ -122,6 +118,7 @@ export default async function PricingPage() {
                 <TableHead>Scope</TableHead>
                 <TableHead>Value</TableHead>
                 <TableHead>Daily Price</TableHead>
+                <TableHead>Date</TableHead>
                 <TableHead>Active</TableHead>
                 <TableHead className="text-right">Actions</TableHead>
               </TableRow>
@@ -132,7 +129,7 @@ export default async function PricingPage() {
               ))}
               {overrides.length === 0 && (
                 <TableRow>
-                  <TableCell colSpan={5} className="text-center text-muted-foreground">
+                  <TableCell colSpan={6} className="text-center text-muted-foreground">
                     No day rate overrides yet.
                   </TableCell>
                 </TableRow>

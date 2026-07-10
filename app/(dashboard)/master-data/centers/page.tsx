@@ -1,20 +1,20 @@
 import { requireAdmin } from "@/lib/auth/session";
 import { listCenters, listCities } from "@/lib/data/master-data";
-import { createCenterAction, deleteCenterAction } from "../actions";
+import { createCenterAction } from "../actions";
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
-import { Table, TableHeader, TableRow, TableHead, TableBody, TableCell } from "@/components/ui/table";
+import { Table, TableHeader, TableRow, TableHead, TableBody } from "@/components/ui/table";
 import { Field, FieldLabel, FieldGroup } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem, SelectGroup } from "@/components/ui/select";
-import { DeleteButton } from "../delete-button";
+import { CenterRow } from "./center-row";
 
 export default async function CentersPage() {
   await requireAdmin();
   const [centers, cities] = await Promise.all([listCenters(), listCities()]);
 
   return (
-    <div className="flex flex-col gap-6 max-w-2xl">
+    <div className="flex flex-col gap-6 overflow-x-auto">
       <Card>
         <CardHeader>
           <CardTitle>Add Center</CardTitle>
@@ -27,7 +27,11 @@ export default async function CentersPage() {
               <FieldGroup>
                 <Field>
                   <FieldLabel htmlFor="cityId">City</FieldLabel>
-                  <Select name="cityId" required>
+                  <Select
+                    name="cityId"
+                    required
+                    items={Object.fromEntries(cities.map((c) => [String(c.id), `${c.name} (${c.unitName})`]))}
+                  >
                     <SelectTrigger id="cityId" className="w-full">
                       <SelectValue placeholder="Select a city" />
                     </SelectTrigger>
@@ -73,17 +77,7 @@ export default async function CentersPage() {
             </TableHeader>
             <TableBody>
               {centers.map((center) => (
-                <TableRow key={center.id}>
-                  <TableCell>{center.name}</TableCell>
-                  <TableCell>{center.cityName}</TableCell>
-                  <TableCell>{center.address}</TableCell>
-                  <TableCell className="text-right">
-                    <DeleteButton
-                      action={deleteCenterAction.bind(null, center.id)}
-                      confirmMessage={`Delete center "${center.name}"?`}
-                    />
-                  </TableCell>
-                </TableRow>
+                <CenterRow key={center.id} center={center} cities={cities} />
               ))}
             </TableBody>
           </Table>

@@ -14,6 +14,7 @@ type Coupon = {
   code: string;
   description: string | null;
   discountAmount: string;
+  totalBudget: string | null;
   active: boolean;
 };
 
@@ -29,6 +30,7 @@ export function CouponRow({ coupon }: { coupon: Coupon }) {
         <TableCell>{coupon.code}</TableCell>
         <TableCell>{coupon.description ?? "—"}</TableCell>
         <TableCell>₹{coupon.discountAmount}</TableCell>
+        <TableCell>{coupon.totalBudget ? `₹${coupon.totalBudget}` : "Unlimited"}</TableCell>
         <TableCell>{coupon.active ? "Yes" : "No"}</TableCell>
         <TableCell className="flex justify-end gap-2">
           <Button type="button" variant="outline" size="xs" onClick={() => setEditing(true)}>
@@ -45,7 +47,7 @@ export function CouponRow({ coupon }: { coupon: Coupon }) {
 
   return (
     <TableRow>
-      <TableCell colSpan={5}>
+      <TableCell colSpan={6}>
         <form
           action={async (formData) => {
             setPending(true);
@@ -90,6 +92,20 @@ export function CouponRow({ coupon }: { coupon: Coupon }) {
               defaultValue={coupon.discountAmount}
               className="w-28"
               required
+            />
+          </div>
+          <div className="flex flex-col gap-1">
+            <label className="text-xs text-muted-foreground" htmlFor={`totalBudget-${coupon.id}`}>
+              Total budget (₹, blank = unlimited)
+            </label>
+            <Input
+              id={`totalBudget-${coupon.id}`}
+              name="totalBudget"
+              type="number"
+              step="0.01"
+              min="0.01"
+              defaultValue={coupon.totalBudget ?? ""}
+              className="w-32"
             />
           </div>
           <label className="flex items-center gap-2 text-sm">

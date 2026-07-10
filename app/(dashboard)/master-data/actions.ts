@@ -4,14 +4,19 @@ import { z } from "zod";
 import { revalidatePath } from "next/cache";
 import {
   createZone,
+  updateZone,
   deleteZone,
   createUnit,
+  updateUnit,
   deleteUnit,
   createCity,
+  updateCity,
   deleteCity,
   createCenter,
+  updateCenter,
   deleteCenter,
   setCityPrice,
+  updateCityPricing,
   deleteCityPricing,
   createPricingOverride,
   updatePricingOverride,
@@ -20,6 +25,7 @@ import {
   updatePoc,
   deletePoc,
   createAdmin,
+  updateAdmin,
   deleteAdmin,
 } from "@/lib/data/master-data";
 
@@ -41,6 +47,15 @@ export async function createZoneAction(formData: FormData) {
   revalidatePath("/master-data/zones");
 }
 
+export async function updateZoneAction(formData: FormData): Promise<ActionResult> {
+  const id = z.coerce.number().int().positive().parse(formData.get("id"));
+  const name = nameSchema.parse(formData.get("name"));
+  return toActionResult(async () => {
+    await updateZone(id, name);
+    revalidatePath("/master-data/zones");
+  });
+}
+
 export async function deleteZoneAction(id: number): Promise<ActionResult> {
   return toActionResult(async () => {
     await deleteZone(id);
@@ -53,6 +68,16 @@ export async function createUnitAction(formData: FormData) {
   const name = nameSchema.parse(formData.get("name"));
   await createUnit(zoneId, name);
   revalidatePath("/master-data/units");
+}
+
+export async function updateUnitAction(formData: FormData): Promise<ActionResult> {
+  const id = z.coerce.number().int().positive().parse(formData.get("id"));
+  const zoneId = z.coerce.number().int().parse(formData.get("zoneId"));
+  const name = nameSchema.parse(formData.get("name"));
+  return toActionResult(async () => {
+    await updateUnit(id, zoneId, name);
+    revalidatePath("/master-data/units");
+  });
 }
 
 export async function deleteUnitAction(id: number): Promise<ActionResult> {
@@ -69,6 +94,16 @@ export async function createCityAction(formData: FormData) {
   revalidatePath("/master-data/cities");
 }
 
+export async function updateCityAction(formData: FormData): Promise<ActionResult> {
+  const id = z.coerce.number().int().positive().parse(formData.get("id"));
+  const unitId = z.coerce.number().int().parse(formData.get("unitId"));
+  const name = nameSchema.parse(formData.get("name"));
+  return toActionResult(async () => {
+    await updateCity(id, unitId, name);
+    revalidatePath("/master-data/cities");
+  });
+}
+
 export async function deleteCityAction(id: number): Promise<ActionResult> {
   return toActionResult(async () => {
     await deleteCity(id);
@@ -82,6 +117,17 @@ export async function createCenterAction(formData: FormData) {
   const address = z.string().trim().optional().parse(formData.get("address") || undefined);
   await createCenter(cityId, name, address);
   revalidatePath("/master-data/centers");
+}
+
+export async function updateCenterAction(formData: FormData): Promise<ActionResult> {
+  const id = z.coerce.number().int().positive().parse(formData.get("id"));
+  const cityId = z.coerce.number().int().parse(formData.get("cityId"));
+  const name = nameSchema.parse(formData.get("name"));
+  const address = z.string().trim().optional().parse(formData.get("address") || undefined);
+  return toActionResult(async () => {
+    await updateCenter(id, cityId, name, address);
+    revalidatePath("/master-data/centers");
+  });
 }
 
 export async function deleteCenterAction(id: number): Promise<ActionResult> {
@@ -102,6 +148,19 @@ export async function setCityPriceAction(formData: FormData) {
   revalidatePath("/master-data/pricing");
 }
 
+export async function updateCityPricingAction(formData: FormData): Promise<ActionResult> {
+  const id = z.coerce.number().int().positive().parse(formData.get("id"));
+  const price = z.coerce.number().positive().parse(formData.get("price")).toFixed(2);
+  const effectiveFrom = z
+    .string()
+    .regex(/^\d{4}-\d{2}-\d{2}$/, "Invalid date")
+    .parse(formData.get("effectiveFrom"));
+  return toActionResult(async () => {
+    await updateCityPricing(id, price, effectiveFrom);
+    revalidatePath("/master-data/pricing");
+  });
+}
+
 export async function deleteCityPricingAction(id: number): Promise<ActionResult> {
   return toActionResult(async () => {
     await deleteCityPricing(id);
@@ -113,8 +172,13 @@ export async function createPricingOverrideAction(formData: FormData): Promise<A
   const scope = z.enum(["global", "unit", "center"]).parse(formData.get("scope"));
   const scopeId = scope === "global" ? null : z.coerce.number().int().positive().parse(formData.get("scopeId"));
   const dailyPrice = z.coerce.number().positive().parse(formData.get("dailyPrice")).toFixed(2);
+  const forDate = z
+    .string()
+    .regex(/^\d{4}-\d{2}-\d{2}$/, "Invalid date")
+    .optional()
+    .parse(formData.get("forDate") || undefined);
   try {
-    await createPricingOverride({ scope, scopeId, dailyPrice });
+    await createPricingOverride({ scope, scopeId, dailyPrice, forDate });
     revalidatePath("/master-data/pricing");
   } catch (e) {
     return { error: e instanceof Error ? e.message : "Failed to add price override" };
@@ -175,8 +239,12 @@ export async function updatePocAction(formData: FormData): Promise<ActionResult>
     .getAll("centerIds")
     .map((v) => Number(v))
     .filter((n) => Number.isInteger(n));
+  const canRecordPayments = formData.get("canRecordPayments") === "on";
+  const canMarkAttendance = formData.get("canMarkAttendance") === "on";
+  const canAddReaders = formData.get("canAddReaders") === "on";
+  const suspended = formData.get("suspended") === "on";
   try {
-    await updatePoc(id, { name, centerIds, password });
+    await updatePoc(id, { name, centerIds, password, canRecordPayments, canMarkAttendance, canAddReaders, suspended });
     revalidatePath("/master-data/pocs");
   } catch (e) {
     return { error: e instanceof Error ? e.message : "Failed to update POC" };
@@ -204,6 +272,15 @@ export async function createAdminAction(
   } catch (e) {
     return { error: e instanceof Error ? e.message : "Failed to create admin" };
   }
+}
+
+export async function updateAdminAction(formData: FormData): Promise<ActionResult> {
+  const id = z.string().min(1).parse(formData.get("id"));
+  const name = nameSchema.parse(formData.get("name"));
+  return toActionResult(async () => {
+    await updateAdmin(id, name);
+    revalidatePath("/master-data/pocs");
+  });
 }
 
 export async function deleteAdminAction(id: string): Promise<ActionResult> {

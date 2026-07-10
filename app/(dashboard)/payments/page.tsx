@@ -63,9 +63,14 @@ export default async function PaymentsPage({
       <div className="flex items-center justify-between">
         <h1 className="text-lg font-semibold">Payment Transactions</h1>
         {currentUser?.role === "admin" && (
-          <Button variant="outline" render={<a href={`/api/export/payments?${exportQuery}`} />} nativeButton={false}>
-            Export
-          </Button>
+          <div className="flex gap-2">
+            <Button variant="outline" render={<Link href="/payments/history" />} nativeButton={false}>
+              Payment History
+            </Button>
+            <Button variant="outline" render={<a href={`/api/export/payments?${exportQuery}`} />} nativeButton={false}>
+              Export
+            </Button>
+          </div>
         )}
       </div>
 
@@ -86,7 +91,11 @@ export default async function PaymentsPage({
             </div>
             <div className="flex flex-col gap-1.5">
               <label htmlFor="centerId" className="text-sm font-medium">Center</label>
-              <Select name="centerId" defaultValue={params.centerId || "any"}>
+              <Select
+                name="centerId"
+                defaultValue={params.centerId || "any"}
+                items={{ any: "Any", ...Object.fromEntries(centers.map((c) => [String(c.id), c.name])) }}
+              >
                 <SelectTrigger id="centerId" className="w-40">
                   <SelectValue />
                 </SelectTrigger>
@@ -104,7 +113,11 @@ export default async function PaymentsPage({
             </div>
             <div className="flex flex-col gap-1.5">
               <label htmlFor="method" className="text-sm font-medium">Method</label>
-              <Select name="method" defaultValue={params.method || "any"}>
+              <Select
+                name="method"
+                defaultValue={params.method || "any"}
+                items={{ any: "Any", ...METHOD_LABELS }}
+              >
                 <SelectTrigger id="method" className="w-36">
                   <SelectValue />
                 </SelectTrigger>

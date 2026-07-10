@@ -53,7 +53,12 @@ export function AttendanceForm({
       <FieldGroup>
         <Field>
           <FieldLabel htmlFor="scope">Scope</FieldLabel>
-          <Select name="scope" value={scope} onValueChange={(v) => setScope(typeof v === "string" ? v : "reader")}>
+          <Select
+            name="scope"
+            value={scope}
+            onValueChange={(v) => setScope(typeof v === "string" ? v : "reader")}
+            items={Object.fromEntries(scopeOptions.map((o) => [o.value, o.label]))}
+          >
             <SelectTrigger id="scope" className="w-full">
               <SelectValue />
             </SelectTrigger>
@@ -72,7 +77,11 @@ export function AttendanceForm({
         {scope !== "org" && (
           <Field>
             <FieldLabel htmlFor="scopeId">{scope === "reader" ? "Reader" : "Target"}</FieldLabel>
-            <Select name={scope === "reader" ? "readerId" : "scopeId"} required>
+            <Select
+              name={scope === "reader" ? "readerId" : "scopeId"}
+              required
+              items={Object.fromEntries(targetOptions.map((o) => [String(o.id), o.label]))}
+            >
               <SelectTrigger id="scopeId" className="w-full">
                 <SelectValue placeholder={`Select a ${scope}`} />
               </SelectTrigger>
@@ -99,7 +108,11 @@ export function AttendanceForm({
         </Field>
         <Field>
           <FieldLabel htmlFor="status">Status</FieldLabel>
-          <Select name="status" defaultValue="delivered">
+          <Select
+            name="status"
+            defaultValue="delivered"
+            items={{ delivered: "Delivered", not_delivered: "Not Delivered (Absent)" }}
+          >
             <SelectTrigger id="status" className="w-full">
               <SelectValue />
             </SelectTrigger>

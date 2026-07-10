@@ -32,7 +32,11 @@ export function ApplyCouponForm({ readerId, coupons }: { readerId: number; coupo
       <FieldGroup>
         <Field>
           <FieldLabel htmlFor="couponId">Coupon</FieldLabel>
-          <Select name="couponId" required>
+          <Select
+            name="couponId"
+            required
+            items={Object.fromEntries(coupons.map((c) => [String(c.id), `${c.code} (₹${c.discountAmount})`]))}
+          >
             <SelectTrigger id="couponId" className="w-full">
               <SelectValue placeholder="Select a coupon" />
             </SelectTrigger>

@@ -1,6 +1,13 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { calculateMonthCharge, priceOnDate, resolveDailyRate, daysInMonth } from "./calculate";
+import {
+  calculateMonthCharge,
+  calculateCycleCharge,
+  getBillingCycle,
+  priceOnDate,
+  resolveDailyRate,
+  daysInMonth,
+} from "./calculate";
 
 const JULY_PRICE = [{ price: 310, effectiveFrom: "2026-01-01" }]; // 310/31 = 10/day exactly
 
@@ -130,7 +137,6 @@ test("resolveDailyRate: center override wins over everything", () => {
   const rate = resolveDailyRate({
     date: "2026-07-01",
     pricingHistory: [{ price: 310, effectiveFrom: "2026-01-01" }],
-    totalDaysInMonth: 31,
     centerOverride: 7,
     unitOverride: 5,
     globalDefault: 8,
@@ -142,7 +148,6 @@ test("resolveDailyRate: unit override wins over city pricing history", () => {
   const rate = resolveDailyRate({
     date: "2026-07-01",
     pricingHistory: [{ price: 310, effectiveFrom: "2026-01-01" }],
-    totalDaysInMonth: 31,
     unitOverride: 5,
   });
   assert.equal(rate, 5);
@@ -152,7 +157,6 @@ test("resolveDailyRate: falls back to city pricing history (divided by days in m
   const rate = resolveDailyRate({
     date: "2026-07-01",
     pricingHistory: [{ price: 310, effectiveFrom: "2026-01-01" }],
-    totalDaysInMonth: 31,
   });
   assert.equal(rate, 10);
 });
@@ -161,14 +165,13 @@ test("resolveDailyRate: global default only applies when city has no price at al
   const rate = resolveDailyRate({
     date: "2026-07-01",
     pricingHistory: [],
-    totalDaysInMonth: 31,
     globalDefault: 8,
   });
   assert.equal(rate, 8);
 });
 
 test("resolveDailyRate: throws when nothing resolves", () => {
-  assert.throws(() => resolveDailyRate({ date: "2026-07-01", pricingHistory: [], totalDaysInMonth: 31 }));
+  assert.throws(() => resolveDailyRate({ date: "2026-07-01", pricingHistory: [] }));
 });
 
 test("calculateMonthCharge honors a unit override as a flat per-day rate", () => {
@@ -181,4 +184,64 @@ test("calculateMonthCharge honors a unit override as a flat per-day rate", () =>
     unitOverride: 7,
   });
   assert.equal(charge, 7 * 31);
+});
+
+test("resolveDailyRate: a special-day price outranks center/unit overrides", () => {
+  const rate = resolveDailyRate({
+    date: "2026-10-20",
+    pricingHistory: [{ price: 310, effectiveFrom: "2026-01-01" }],
+    centerOverride: 7,
+    unitOverride: 5,
+    specialDayPrice: 50,
+  });
+  assert.equal(rate, 50);
+});
+
+test("calculateMonthCharge applies a festival one-day hike only on that date", () => {
+  const attendance: Record<string, "delivered" | "not_delivered"> = {};
+  for (let d = 1; d <= 31; d++) attendance[`2026-10-${String(d).padStart(2, "0")}`] = "delivered";
+  const charge = calculateMonthCharge({
+    billingPeriod: "2026-10",
+    subscriptionStartDate: "2026-01-01",
+    attendance,
+    pricingHistory: JULY_PRICE, // 310/31 = 10/day
+    today: "2026-11-01",
+    specialDayPrices: { "2026-10-20": 100 },
+  });
+  // 30 normal days at 10/day + 1 festival day at 100
+  assert.equal(charge, 30 * 10 + 100);
+});
+
+test("getBillingCycle: reference date past the anchor falls in this month's cycle", () => {
+  const { cycleStart, cycleEnd } = getBillingCycle(15, "2026-07-20");
+  assert.equal(cycleStart, "2026-07-15");
+  assert.equal(cycleEnd, "2026-08-14");
+});
+
+test("getBillingCycle: reference date before the anchor falls in last month's cycle", () => {
+  const { cycleStart, cycleEnd } = getBillingCycle(15, "2026-07-10");
+  assert.equal(cycleStart, "2026-06-15");
+  assert.equal(cycleEnd, "2026-07-14");
+});
+
+test("getBillingCycle: rolls over the year boundary", () => {
+  const { cycleStart, cycleEnd } = getBillingCycle(15, "2026-01-05");
+  assert.equal(cycleStart, "2025-12-15");
+  assert.equal(cycleEnd, "2026-01-14");
+});
+
+test("calculateCycleCharge prorates a cross-month cycle against each day's own month", () => {
+  // Cycle 2026-07-15..2026-08-14: 17 days of July (31-day month) + 14 days
+  // of August (31-day month too, so same day-count coincidence avoided by
+  // picking a price that only matters if per-day division is wrong).
+  const pricingHistory = [{ price: 620, effectiveFrom: "2026-01-01" }]; // 620/31 = 20/day in both months
+  const charge = calculateCycleCharge({
+    cycleStart: "2026-07-15",
+    cycleEnd: "2026-08-14",
+    subscriptionStartDate: "2026-01-01",
+    attendance: {},
+    pricingHistory,
+    today: "2026-09-01",
+  });
+  assert.equal(charge, 31 * 20); // 17 July days + 14 Aug days = 31 days * 20/day
 });

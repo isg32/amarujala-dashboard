@@ -68,7 +68,11 @@ export default async function BillingPage({
             </div>
             <div className="flex flex-col gap-1.5">
               <label htmlFor="centerId" className="text-sm font-medium">Center</label>
-              <Select name="centerId" defaultValue={params.centerId || "any"}>
+              <Select
+                name="centerId"
+                defaultValue={params.centerId || "any"}
+                items={{ any: "Any", ...Object.fromEntries(centers.map((c) => [String(c.id), c.name])) }}
+              >
                 <SelectTrigger id="centerId" className="w-48">
                   <SelectValue />
                 </SelectTrigger>
@@ -90,7 +94,11 @@ export default async function BillingPage({
             </div>
             <div className="flex flex-col gap-1.5">
               <label htmlFor="status" className="text-sm font-medium">Status</label>
-              <Select name="status" defaultValue={params.status || "any"}>
+              <Select
+                name="status"
+                defaultValue={params.status || "any"}
+                items={{ any: "Any", due: "Due", paid: "Paid" }}
+              >
                 <SelectTrigger id="status" className="w-32">
                   <SelectValue />
                 </SelectTrigger>

@@ -1,5 +1,5 @@
 import { requireAppUser } from "@/lib/auth/session";
-import { listReaders } from "@/lib/data/readers";
+import { listReaders, listAssignableCentersWithPocs } from "@/lib/data/readers";
 import { listPaymentTransactions } from "@/lib/data/payments";
 import { getPaymentDueReport, getAttendanceReport, getGroupedReport, getMonthlySummaryReport } from "@/lib/data/reports";
 import { Card, CardContent } from "@/components/ui/card";
@@ -31,21 +31,28 @@ type ReportType = (typeof REPORT_TYPES)[number]["value"];
 export default async function ReportsPage({
   searchParams,
 }: {
-  searchParams: Promise<{ type?: string; dateFrom?: string; dateTo?: string }>;
+  searchParams: Promise<{ type?: string; dateFrom?: string; dateTo?: string; centerId?: string; search?: string }>;
 }) {
   const currentUser = await requireAppUser();
+  const isAdmin = currentUser.role === "admin";
   const params = await searchParams;
   const type: ReportType = REPORT_TYPES.some((r) => r.value === params.type) ? (params.type as ReportType) : "reader";
   const dateFrom = params.dateFrom || new Date(new Date().getFullYear(), new Date().getMonth(), 1).toISOString().slice(0, 10);
   const dateTo = params.dateTo || new Date().toISOString().slice(0, 10);
+  const centerId = params.centerId ? Number(params.centerId) : undefined;
+  const search = params.search || undefined;
+
+  const centers = isAdmin ? await listAssignableCentersWithPocs() : [];
 
   const exportQuery = new URLSearchParams({ dateFrom, dateTo });
+  if (centerId) exportQuery.set("centerId", String(centerId));
+  if (search) exportQuery.set("search", search);
 
   return (
     <div className="flex flex-col gap-6">
       <div className="flex items-center justify-between">
         <h1 className="text-lg font-semibold">Reports</h1>
-        {currentUser.role === "admin" && (
+        {isAdmin && (
           <Button
             variant="outline"
             render={<a href={`/api/export/reports/${type}?${exportQuery}`} />}
@@ -61,7 +68,11 @@ export default async function ReportsPage({
           <form className="flex flex-wrap items-end gap-3" method="get">
             <div className="flex flex-col gap-1.5">
               <label htmlFor="type" className="text-sm font-medium">Report</label>
-              <Select name="type" defaultValue={type}>
+              <Select
+                name="type"
+                defaultValue={type}
+                items={Object.fromEntries(REPORT_TYPES.map((r) => [r.value, r.label]))}
+              >
                 <SelectTrigger id="type" className="w-56">
                   <SelectValue />
                 </SelectTrigger>
@@ -76,7 +87,37 @@ export default async function ReportsPage({
                 </SelectContent>
               </Select>
             </div>
-            {type === "attendance" && (
+            {isAdmin && (
+              <div className="flex flex-col gap-1.5">
+                <label htmlFor="centerId" className="text-sm font-medium">Center</label>
+                <Select
+                  name="centerId"
+                  defaultValue={params.centerId || "any"}
+                  items={{ any: "Any", ...Object.fromEntries(centers.map((c) => [String(c.id), c.name])) }}
+                >
+                  <SelectTrigger id="centerId" className="w-48">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectGroup>
+                      <SelectItem value="any">Any</SelectItem>
+                      {centers.map((c) => (
+                        <SelectItem key={c.id} value={String(c.id)}>
+                          {c.name}
+                        </SelectItem>
+                      ))}
+                    </SelectGroup>
+                  </SelectContent>
+                </Select>
+              </div>
+            )}
+            {(type === "reader" || type === "collection") && (
+              <div className="flex flex-col gap-1.5">
+                <label htmlFor="search" className="text-sm font-medium">Search</label>
+                <Input id="search" name="search" defaultValue={params.search} placeholder="Name, mobile, ID" className="w-48" />
+              </div>
+            )}
+            {(type === "attendance" || type === "collection") && (
               <>
                 <div className="flex flex-col gap-1.5">
                   <label htmlFor="dateFrom" className="text-sm font-medium">From</label>
@@ -93,14 +134,26 @@ export default async function ReportsPage({
         </CardContent>
       </Card>
 
-      <ReportTable type={type} dateFrom={dateFrom} dateTo={dateTo} />
+      <ReportTable type={type} dateFrom={dateFrom} dateTo={dateTo} centerId={centerId} search={search} />
     </div>
   );
 }
 
-async function ReportTable({ type, dateFrom, dateTo }: { type: ReportType; dateFrom: string; dateTo: string }) {
+async function ReportTable({
+  type,
+  dateFrom,
+  dateTo,
+  centerId,
+  search,
+}: {
+  type: ReportType;
+  dateFrom: string;
+  dateTo: string;
+  centerId?: number;
+  search?: string;
+}) {
   if (type === "reader") {
-    const rows = await listReaders();
+    const rows = await listReaders({ centerId, search });
     return (
       <ReportCard>
         <TableHeader>
@@ -130,7 +183,7 @@ async function ReportTable({ type, dateFrom, dateTo }: { type: ReportType; dateF
   }
 
   if (type === "payment_due") {
-    const rows = await getPaymentDueReport();
+    const rows = await getPaymentDueReport({ centerId });
     return (
       <ReportCard>
         <TableHeader>
@@ -158,7 +211,7 @@ async function ReportTable({ type, dateFrom, dateTo }: { type: ReportType; dateF
   }
 
   if (type === "collection") {
-    const rows = await listPaymentTransactions();
+    const rows = await listPaymentTransactions({ centerId, search, dateFrom, dateTo });
     return (
       <ReportCard>
         <TableHeader>
@@ -188,7 +241,7 @@ async function ReportTable({ type, dateFrom, dateTo }: { type: ReportType; dateF
   }
 
   if (type === "attendance") {
-    const rows = await getAttendanceReport(dateFrom, dateTo);
+    const rows = await getAttendanceReport(dateFrom, dateTo, { centerId });
     return (
       <ReportCard>
         <TableHeader>
@@ -214,7 +267,7 @@ async function ReportTable({ type, dateFrom, dateTo }: { type: ReportType; dateF
   }
 
   if (type === "monthly_summary") {
-    const rows = await getMonthlySummaryReport();
+    const rows = await getMonthlySummaryReport({ centerId });
     return (
       <ReportCard>
         <TableHeader>
@@ -240,7 +293,7 @@ async function ReportTable({ type, dateFrom, dateTo }: { type: ReportType; dateF
   }
 
   const groupBy = type === "city_wise" ? "city" : type === "center_wise" ? "center" : "poc";
-  const rows = await getGroupedReport(groupBy);
+  const rows = await getGroupedReport(groupBy, { centerId });
   return (
     <ReportCard>
       <TableHeader>

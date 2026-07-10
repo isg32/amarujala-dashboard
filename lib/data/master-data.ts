@@ -13,6 +13,7 @@ import {
   pricingOverrides,
   appUsers,
   pocCenters,
+  pocPermissions,
 } from "@/lib/db/schema";
 
 // No onDelete cascade exists anywhere in the schema (every FK is default
@@ -33,6 +34,11 @@ export async function listZones() {
 export async function createZone(name: string) {
   await requireAdmin();
   await db.insert(zones).values({ name });
+}
+
+export async function updateZone(id: number, name: string) {
+  await requireAdmin();
+  await db.update(zones).set({ name }).where(eq(zones.id, id));
 }
 
 export async function deleteZone(id: number) {
@@ -59,6 +65,11 @@ export async function createUnit(zoneId: number, name: string) {
   await db.insert(units).values({ zoneId, name });
 }
 
+export async function updateUnit(id: number, zoneId: number, name: string) {
+  await requireAdmin();
+  await db.update(units).set({ zoneId, name }).where(eq(units.id, id));
+}
+
 export async function deleteUnit(id: number) {
   await requireAdmin();
   try {
@@ -81,6 +92,11 @@ export async function listCities() {
 export async function createCity(unitId: number, name: string) {
   await requireAdmin();
   await db.insert(cities).values({ unitId, name });
+}
+
+export async function updateCity(id: number, unitId: number, name: string) {
+  await requireAdmin();
+  await db.update(cities).set({ unitId, name }).where(eq(cities.id, id));
 }
 
 export async function deleteCity(id: number) {
@@ -118,6 +134,11 @@ export async function createCenter(cityId: number, name: string, address?: strin
   await db.insert(centers).values({ cityId, name, address });
 }
 
+export async function updateCenter(id: number, cityId: number, name: string, address?: string) {
+  await requireAdmin();
+  await db.update(centers).set({ cityId, name, address }).where(eq(centers.id, id));
+}
+
 export async function deleteCenter(id: number) {
   await requireAdmin();
   try {
@@ -149,6 +170,11 @@ export async function listCityPricing() {
 export async function setCityPrice(cityId: number, price: string, effectiveFrom: string) {
   await requireAdmin();
   await db.insert(cityPricing).values({ cityId, price, effectiveFrom });
+}
+
+export async function updateCityPricing(id: number, price: string, effectiveFrom: string) {
+  await requireAdmin();
+  await db.update(cityPricing).set({ price, effectiveFrom }).where(eq(cityPricing.id, id));
 }
 
 export async function deleteCityPricing(id: number) {
@@ -185,6 +211,9 @@ export async function createPricingOverride(input: {
   scope: "global" | "unit" | "center";
   scopeId: number | null;
   dailyPrice: string;
+  /** 'YYYY-MM-DD', optional — set for a one-day-only hike (e.g. a festival)
+   * instead of an ongoing Day Rate. */
+  forDate?: string;
 }) {
   const user = await requireAdmin();
   if (input.scope !== "global" && input.scopeId == null) {
@@ -194,6 +223,7 @@ export async function createPricingOverride(input: {
     scope: input.scope,
     scopeId: input.scope === "global" ? null : input.scopeId,
     dailyPrice: input.dailyPrice,
+    forDate: input.forDate,
     createdBy: user.id,
   });
 }
@@ -214,23 +244,31 @@ export async function deletePricingOverride(id: number) {
 export async function listPocs() {
   await requireAdmin();
   const pocs = await db
-    .select({ id: appUsers.id, name: appUsers.name, email: appUsers.email })
+    .select({ id: appUsers.id, name: appUsers.name, email: appUsers.email, suspended: appUsers.suspended })
     .from(appUsers)
     .where(eq(appUsers.role, "au_poc"))
     .orderBy(asc(appUsers.name));
 
-  const assignments = await db
-    .select({
-      pocUserId: pocCenters.pocUserId,
-      centerId: pocCenters.centerId,
-      centerName: centers.name,
-    })
-    .from(pocCenters)
-    .innerJoin(centers, eq(pocCenters.centerId, centers.id));
+  const [assignments, permissionRows] = await Promise.all([
+    db
+      .select({
+        pocUserId: pocCenters.pocUserId,
+        centerId: pocCenters.centerId,
+        centerName: centers.name,
+      })
+      .from(pocCenters)
+      .innerJoin(centers, eq(pocCenters.centerId, centers.id)),
+    db.select().from(pocPermissions),
+  ]);
+  const permissionsByPoc = new Map(permissionRows.map((p) => [p.pocUserId, p]));
 
   return pocs.map((poc) => ({
     ...poc,
     centers: assignments.filter((a) => a.pocUserId === poc.id).map((a) => ({ id: a.centerId, name: a.centerName })),
+    // Missing row = full access, same default as lib/auth/session.ts.
+    canRecordPayments: permissionsByPoc.get(poc.id)?.canRecordPayments ?? true,
+    canMarkAttendance: permissionsByPoc.get(poc.id)?.canMarkAttendance ?? true,
+    canAddReaders: permissionsByPoc.get(poc.id)?.canAddReaders ?? true,
   }));
 }
 
@@ -267,13 +305,40 @@ export async function createPoc(input: { name: string; email: string; centerIds:
 // the actual Neon Auth login identifier, and changing app_users.email alone
 // would desync it from the real account — a genuine email change needs a
 // dedicated Neon Auth admin call we haven't wired up, not just a DB update.
-export async function updatePoc(id: string, input: { name: string; centerIds: number[]; password?: string }) {
+export async function updatePoc(
+  id: string,
+  input: {
+    name: string;
+    centerIds: number[];
+    password?: string;
+    canRecordPayments: boolean;
+    canMarkAttendance: boolean;
+    canAddReaders: boolean;
+    suspended: boolean;
+  }
+) {
   await requireAdmin();
-  await db.update(appUsers).set({ name: input.name }).where(eq(appUsers.id, id));
+  await db.update(appUsers).set({ name: input.name, suspended: input.suspended }).where(eq(appUsers.id, id));
   await db.delete(pocCenters).where(eq(pocCenters.pocUserId, id));
   if (input.centerIds.length > 0) {
     await db.insert(pocCenters).values(input.centerIds.map((centerId) => ({ pocUserId: id, centerId })));
   }
+  await db
+    .insert(pocPermissions)
+    .values({
+      pocUserId: id,
+      canRecordPayments: input.canRecordPayments,
+      canMarkAttendance: input.canMarkAttendance,
+      canAddReaders: input.canAddReaders,
+    })
+    .onConflictDoUpdate({
+      target: pocPermissions.pocUserId,
+      set: {
+        canRecordPayments: input.canRecordPayments,
+        canMarkAttendance: input.canMarkAttendance,
+        canAddReaders: input.canAddReaders,
+      },
+    });
   if (input.password) {
     await auth.admin.setUserPassword({ userId: id, newPassword: input.password });
   }
@@ -283,6 +348,7 @@ export async function deletePoc(id: string) {
   await requireAdmin();
   try {
     await db.delete(pocCenters).where(eq(pocCenters.pocUserId, id));
+    await db.delete(pocPermissions).where(eq(pocPermissions.pocUserId, id));
     await db.delete(appUsers).where(eq(appUsers.id, id));
   } catch (err) {
     if (isForeignKeyViolation(err)) {
@@ -312,6 +378,11 @@ export async function createAdmin(input: { name: string; email: string; password
   await db.insert(appUsers).values({ id, name: input.name, email: input.email, role: "admin" });
 
   return { id, tempPassword };
+}
+
+export async function updateAdmin(id: string, name: string) {
+  await requireAdmin();
+  await db.update(appUsers).set({ name }).where(eq(appUsers.id, id));
 }
 
 export async function deleteAdmin(id: string) {

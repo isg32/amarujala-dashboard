@@ -4,11 +4,14 @@ import { z } from "zod";
 import { revalidatePath } from "next/cache";
 import { createCoupon, updateCoupon, deleteCoupon, applyCoupon } from "@/lib/data/coupons";
 
+const optionalBudgetSchema = z.coerce.number().positive().optional();
+
 export async function createCouponAction(formData: FormData) {
   const code = z.string().trim().min(1).parse(formData.get("code"));
   const description = z.string().trim().optional().parse(formData.get("description") || undefined);
   const discountAmount = z.coerce.number().positive().parse(formData.get("discountAmount"));
-  await createCoupon(code, description, discountAmount);
+  const totalBudget = optionalBudgetSchema.parse(formData.get("totalBudget") || undefined);
+  await createCoupon(code, description, discountAmount, totalBudget);
   revalidatePath("/coupons");
 }
 
@@ -17,9 +20,11 @@ export async function updateCouponAction(formData: FormData): Promise<{ error: s
   const description = z.string().trim().optional().parse(formData.get("description") || undefined);
   const discountAmount = z.coerce.number().positive().parse(formData.get("discountAmount"));
   const active = formData.get("active") === "on";
+  const totalBudget = optionalBudgetSchema.parse(formData.get("totalBudget") || undefined) ?? null;
   try {
-    await updateCoupon(id, { description, discountAmount, active });
+    await updateCoupon(id, { description, discountAmount, active, totalBudget });
     revalidatePath("/coupons");
+    revalidatePath("/coupons/usage");
   } catch (e) {
     return { error: e instanceof Error ? e.message : "Failed to update coupon" };
   }

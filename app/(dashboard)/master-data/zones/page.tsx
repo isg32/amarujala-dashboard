@@ -1,19 +1,19 @@
 import { requireAdmin } from "@/lib/auth/session";
 import { listZones } from "@/lib/data/master-data";
-import { createZoneAction, deleteZoneAction } from "../actions";
+import { createZoneAction } from "../actions";
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
-import { Table, TableHeader, TableRow, TableHead, TableBody, TableCell } from "@/components/ui/table";
+import { Table, TableHeader, TableRow, TableHead, TableBody } from "@/components/ui/table";
 import { Field, FieldLabel, FieldGroup } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
-import { DeleteButton } from "../delete-button";
+import { ZoneRow } from "./zone-row";
 
 export default async function ZonesPage() {
   await requireAdmin();
   const zones = await listZones();
 
   return (
-    <div className="flex flex-col gap-6 max-w-2xl">
+    <div className="flex flex-col gap-6 overflow-x-auto">
       <Card>
         <CardHeader>
           <CardTitle>Add Zone</CardTitle>
@@ -45,15 +45,7 @@ export default async function ZonesPage() {
             </TableHeader>
             <TableBody>
               {zones.map((zone) => (
-                <TableRow key={zone.id}>
-                  <TableCell>{zone.name}</TableCell>
-                  <TableCell className="text-right">
-                    <DeleteButton
-                      action={deleteZoneAction.bind(null, zone.id)}
-                      confirmMessage={`Delete zone "${zone.name}"?`}
-                    />
-                  </TableCell>
-                </TableRow>
+                <ZoneRow key={zone.id} zone={zone} />
               ))}
             </TableBody>
           </Table>

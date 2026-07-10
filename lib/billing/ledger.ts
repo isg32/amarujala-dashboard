@@ -18,6 +18,13 @@ export interface PostLedgerEntryInput {
    */
   amount: number;
   billingPeriod?: string;
+  /**
+   * 'YYYY-MM-DD' — when this financial event actually happened, not when the
+   * row was written. Defaults to today. Callers with a real date to backdate
+   * to (e.g. Record Payment's paymentDate field) must pass it explicitly, or
+   * the ledger will show data-entry time instead of the true payment date.
+   */
+  entryDate?: string;
   referenceId?: number;
   description?: string;
   createdBy?: string;
@@ -35,6 +42,7 @@ export async function postLedgerEntry(input: PostLedgerEntryInput, tx?: Tx) {
       entryType: input.entryType,
       amount: input.amount.toFixed(2),
       billingPeriod: input.billingPeriod,
+      entryDate: input.entryDate,
       referenceId: input.referenceId,
       description: input.description,
       createdBy: input.createdBy,

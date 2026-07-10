@@ -17,6 +17,7 @@ import {
   Map,
   UserCog,
   Tag,
+  MessageSquareText,
 } from "lucide-react";
 import { UserButton } from "@neondatabase/auth/react/ui";
 import { ThemeToggle } from "./theme-toggle";
@@ -53,6 +54,7 @@ const MASTER_DATA_LINKS = [
   { href: "/master-data/centers", label: "Centers", icon: Landmark },
   { href: "/master-data/pocs", label: "POCs", icon: UserCog },
   { href: "/master-data/pricing", label: "Pricing", icon: Tag },
+  { href: "/master-data/sms-templates", label: "SMS Templates", icon: MessageSquareText },
 ];
 
 function NavLink({

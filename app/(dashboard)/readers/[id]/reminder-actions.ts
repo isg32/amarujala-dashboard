@@ -1,12 +1,20 @@
 "use server";
 
 import { z } from "zod";
+import { requireAppUser } from "@/lib/auth/session";
 import { getReader } from "@/lib/data/readers";
 import { sendPaymentReminder } from "@/lib/sms/send-reminder";
 
-export async function sendPaymentReminderAction(formData: FormData) {
-  const readerId = z.coerce.number().int().positive().parse(formData.get("readerId"));
-  const reader = await getReader(readerId);
-  if (!reader) throw new Error("Reader not found.");
-  await sendPaymentReminder(reader);
+export async function sendPaymentReminderAction(
+  readerId: number
+): Promise<{ error: string } | { message: string }> {
+  const user = await requireAppUser();
+  if (user.suspended) {
+    return { error: "Your account is suspended. Contact an Administrator." };
+  }
+  const id = z.coerce.number().int().positive().parse(readerId);
+  const reader = await getReader(id);
+  if (!reader) return { error: "Reader not found." };
+  const result = await sendPaymentReminder(reader);
+  return result.success ? { message: "Reminder sent." } : { error: `SMS failed to send: ${result.error}` };
 }
