@@ -69,9 +69,21 @@ function baseReaderQuery() {
     .leftJoin(appUsers, eq(readers.assignedPocId, appUsers.id));
 }
 
-export async function listReaders(filters: ReaderFilters = {}) {
-  const user = await requireAppUser();
+// Same FROM/JOIN chain as baseReaderQuery, just counting instead of
+// selecting rows — kept as its own small function (rather than a generic
+// wrapper) since Drizzle's chained builder types don't generalize well.
+function readerCountQuery() {
+  return db
+    .select({ total: sql<number>`count(*)::int` })
+    .from(readers)
+    .innerJoin(centers, eq(readers.centerId, centers.id))
+    .innerJoin(cities, eq(centers.cityId, cities.id))
+    .innerJoin(units, eq(cities.unitId, units.id))
+    .innerJoin(zones, eq(units.zoneId, zones.id))
+    .leftJoin(appUsers, eq(readers.assignedPocId, appUsers.id));
+}
 
+function buildReaderConditions(user: AppUser, filters: ReaderFilters) {
   const conditions = [scopeToCenters(user)];
   if (filters.search) {
     const term = `%${filters.search}%`;
@@ -95,10 +107,29 @@ export async function listReaders(filters: ReaderFilters = {}) {
   if (filters.zoneId) conditions.push(eq(units.zoneId, filters.zoneId));
   if (filters.landmark) conditions.push(ilike(readers.landmark, `%${filters.landmark}%`));
   if (filters.dueOnly) conditions.push(gt(readers.outstandingBalance, "0"));
+  return and(...conditions.filter((c) => c !== undefined));
+}
 
-  return baseReaderQuery()
-    .where(and(...conditions.filter((c) => c !== undefined)))
-    .orderBy(desc(readers.createdAt));
+// Unpaginated — for exports, reports, and the attendance page's reader
+// picker, all of which need every matching row, not one page.
+export async function listReaders(filters: ReaderFilters = {}) {
+  const user = await requireAppUser();
+  return baseReaderQuery().where(buildReaderConditions(user, filters)).orderBy(desc(readers.createdAt));
+}
+
+// For the reader directory table: one page of rows plus the total count of
+// every reader matching the same filters (so the on-screen count and
+// pagination controls always agree with what's actually being shown).
+export async function listReadersPaginated(filters: ReaderFilters = {}, page = 1, pageSize = 50) {
+  const user = await requireAppUser();
+  const where = buildReaderConditions(user, filters);
+
+  const [rows, [{ total }]] = await Promise.all([
+    baseReaderQuery().where(where).orderBy(desc(readers.createdAt)).limit(pageSize).offset((page - 1) * pageSize),
+    readerCountQuery().where(where),
+  ]);
+
+  return { rows, total, page, pageSize, totalPages: Math.max(1, Math.ceil(total / pageSize)) };
 }
 
 export async function getReader(id: number) {

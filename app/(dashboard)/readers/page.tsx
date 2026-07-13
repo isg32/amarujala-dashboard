@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { getCurrentAppUser } from "@/lib/auth/session";
-import { listReaders, listAssignableCentersWithPocs } from "@/lib/data/readers";
+import { listReadersPaginated, listAssignableCentersWithPocs } from "@/lib/data/readers";
 import { listUnits } from "@/lib/data/master-data";
 import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -16,6 +16,8 @@ import {
 } from "@/components/ui/select";
 import { ReaderTable } from "./reader-table";
 
+const PAGE_SIZE = 50;
+
 export default async function ReadersPage({
   searchParams,
 }: {
@@ -27,6 +29,7 @@ export default async function ReadersPage({
     landmark?: string;
     dueOnly?: string;
     newlyAdded?: string;
+    page?: string;
   }>;
 }) {
   const params = await searchParams;
@@ -34,21 +37,26 @@ export default async function ReadersPage({
   const unitId = params.unitId ? Number(params.unitId) : undefined;
   const status = params.status === "active" || params.status === "inactive" ? params.status : undefined;
   const dueOnly = params.dueOnly === "true";
+  const page = Math.max(1, Number(params.page) || 1);
 
   const currentUser = await getCurrentAppUser();
   const isAdmin = currentUser?.role === "admin";
   const canAddReaders = isAdmin || currentUser?.permissions.canAddReaders === true;
 
-  const [readerRows, centers, units] = await Promise.all([
-    listReaders({
-      search: params.search || undefined,
-      status,
-      centerId,
-      unitId,
-      landmark: params.landmark || undefined,
-      dueOnly,
-      newlyAdded: params.newlyAdded === "true",
-    }),
+  const [{ rows: readerRows, total, totalPages }, centers, units] = await Promise.all([
+    listReadersPaginated(
+      {
+        search: params.search || undefined,
+        status,
+        centerId,
+        unitId,
+        landmark: params.landmark || undefined,
+        dueOnly,
+        newlyAdded: params.newlyAdded === "true",
+      },
+      page,
+      PAGE_SIZE
+    ),
     listAssignableCentersWithPocs(),
     // listUnits() is requireAdmin()-gated; AU POCs don't get a Unit filter.
     isAdmin ? listUnits() : Promise.resolve([]),
@@ -59,10 +67,29 @@ export default async function ReadersPage({
   if (params.status) exportQuery.set("status", params.status);
   if (params.centerId) exportQuery.set("centerId", params.centerId);
 
+  function pageHref(targetPage: number) {
+    const query = new URLSearchParams();
+    if (params.search) query.set("search", params.search);
+    if (params.status) query.set("status", params.status);
+    if (params.centerId) query.set("centerId", params.centerId);
+    if (params.unitId) query.set("unitId", params.unitId);
+    if (params.landmark) query.set("landmark", params.landmark);
+    if (params.dueOnly) query.set("dueOnly", params.dueOnly);
+    if (params.newlyAdded) query.set("newlyAdded", params.newlyAdded);
+    query.set("page", String(targetPage));
+    return `/readers?${query}`;
+  }
+
+  const firstRow = total === 0 ? 0 : (page - 1) * PAGE_SIZE + 1;
+  const lastRow = Math.min(page * PAGE_SIZE, total);
+
   return (
     <div className="flex flex-col gap-6">
       <div className="flex items-center justify-between">
-        <h1 className="text-lg font-semibold">Reader Directory</h1>
+        <div>
+          <h1 className="text-lg font-semibold">Reader Directory</h1>
+          <p className="text-sm text-muted-foreground">{total} reader{total === 1 ? "" : "s"} found</p>
+        </div>
         <div className="flex gap-2">
           {isAdmin && (
             <Button variant="outline" render={<a href={`/api/export/readers?${exportQuery}`} />} nativeButton={false}>
@@ -172,6 +199,37 @@ export default async function ReadersPage({
           <ReaderTable readers={readerRows} isAdmin={isAdmin} />
         </CardContent>
       </Card>
+
+      {total > 0 && (
+        <div className="flex items-center justify-between text-sm text-muted-foreground">
+          <span>
+            Showing {firstRow}–{lastRow} of {total}
+          </span>
+          <div className="flex items-center gap-2">
+            {page > 1 ? (
+              <Button variant="outline" size="sm" render={<Link href={pageHref(page - 1)} prefetch={false} />} nativeButton={false}>
+                Previous
+              </Button>
+            ) : (
+              <Button variant="outline" size="sm" disabled>
+                Previous
+              </Button>
+            )}
+            <span>
+              Page {page} of {totalPages}
+            </span>
+            {page < totalPages ? (
+              <Button variant="outline" size="sm" render={<Link href={pageHref(page + 1)} prefetch={false} />} nativeButton={false}>
+                Next
+              </Button>
+            ) : (
+              <Button variant="outline" size="sm" disabled>
+                Next
+              </Button>
+            )}
+          </div>
+        </div>
+      )}
     </div>
   );
 }
