@@ -26,9 +26,10 @@ export async function recordPaymentAction(
     .string()
     .regex(/^\d{4}-\d{2}-\d{2}$/, "Invalid date")
     .parse(formData.get("paymentDate"));
+  const inProcess = formData.get("inProcess") === "true";
 
   try {
-    await recordPayment({ readerId, amount, method, methodOtherLabel, transactionReference, remarks, paymentDate });
+    await recordPayment({ readerId, amount, method, methodOtherLabel, transactionReference, remarks, paymentDate, inProcess });
     revalidatePath(`/readers/${readerId}`);
     revalidatePath("/payments");
     return { message: `Recorded payment of ₹${amount.toFixed(2)}.` };

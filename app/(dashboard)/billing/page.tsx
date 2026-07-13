@@ -1,34 +1,32 @@
 import { requireAdmin } from "@/lib/auth/session";
-import { listBillingCycles } from "@/lib/data/billing";
+import { listReadersWithAmountDue } from "@/lib/data/billing";
 import { listAssignableCentersWithPocs } from "@/lib/data/readers";
+import { formatAmountDue } from "@/lib/billing/format";
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from "@/components/ui/card";
 import { Table, TableHeader, TableRow, TableHead, TableBody, TableCell } from "@/components/ui/table";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem, SelectGroup } from "@/components/ui/select";
-import { CloseMonthForm } from "./close-month-form";
 
-// Closing a month iterates every eligible reader; raise the Server Action
-// timeout above the platform default (60s is the max on Vercel's Hobby
-// plan, raise further on Pro) for orgs with many readers.
+// listReadersWithAmountDue computes a live provisional charge for every
+// matching reader (unfiltered = the whole org) — still a batched query, but
+// worth the same headroom Close Month used to get.
 export const maxDuration = 60;
 
 export default async function BillingPage({
   searchParams,
 }: {
-  searchParams: Promise<{ search?: string; centerId?: string; billingPeriod?: string; status?: string }>;
+  searchParams: Promise<{ search?: string; centerId?: string; status?: string }>;
 }) {
   await requireAdmin();
   const params = await searchParams;
-  const defaultPeriod = new Date().toISOString().slice(0, 7);
   const centerId = params.centerId ? Number(params.centerId) : undefined;
   const status = params.status === "due" || params.status === "paid" ? params.status : undefined;
 
-  const [cycles, centers] = await Promise.all([
-    listBillingCycles({
+  const [rows, centers] = await Promise.all([
+    listReadersWithAmountDue({
       search: params.search || undefined,
       centerId,
-      billingPeriod: params.billingPeriod || undefined,
       status,
     }),
     listAssignableCentersWithPocs(),
@@ -36,28 +34,13 @@ export default async function BillingPage({
 
   return (
     <div className="flex flex-col gap-6">
-      <Card className="max-w-md">
-        <CardHeader>
-          <CardTitle>Close Month</CardTitle>
-          <CardDescription>
-            Posts an immutable monthly charge to every eligible reader for the selected period, based
-            on their delivery attendance and city pricing. Safe to re-run — readers already closed for
-            a period are skipped.
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
-          <CloseMonthForm defaultPeriod={defaultPeriod} />
-        </CardContent>
-      </Card>
-
       <Card>
         <CardHeader>
-          <CardTitle>All Payment Cycles</CardTitle>
+          <CardTitle>Amount Due</CardTitle>
           <CardDescription>
-            One row per reader per closed billing period. &quot;Outstanding&quot; is the reader&apos;s
-            current overall balance, not specific to this period — payments aren&apos;t tracked per
-            cycle in this app, only as a running total (see the reader&apos;s own profile for their
-            full ledger history).
+            One row per reader — Amount Due is live (posted balance + today&apos;s unbilled charge), no Close
+            Month step needed. A subscription only gets a final ledger charge when it&apos;s actually closed
+            (see a reader&apos;s own profile for &quot;Close Subscription&quot;).
           </CardDescription>
         </CardHeader>
         <CardContent className="flex flex-col gap-4">
@@ -89,24 +72,20 @@ export default async function BillingPage({
               </Select>
             </div>
             <div className="flex flex-col gap-1.5">
-              <label htmlFor="billingPeriod" className="text-sm font-medium">Billing Month</label>
-              <Input id="billingPeriod" name="billingPeriod" type="month" defaultValue={params.billingPeriod} className="w-40" />
-            </div>
-            <div className="flex flex-col gap-1.5">
               <label htmlFor="status" className="text-sm font-medium">Status</label>
               <Select
                 name="status"
                 defaultValue={params.status || "any"}
-                items={{ any: "Any", due: "Due", paid: "Paid" }}
+                items={{ any: "Any", due: "Due", paid: "Paid / Credit" }}
               >
-                <SelectTrigger id="status" className="w-32">
+                <SelectTrigger id="status" className="w-36">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
                   <SelectGroup>
                     <SelectItem value="any">Any</SelectItem>
                     <SelectItem value="due">Due</SelectItem>
-                    <SelectItem value="paid">Paid</SelectItem>
+                    <SelectItem value="paid">Paid / Credit</SelectItem>
                   </SelectGroup>
                 </SelectContent>
               </Select>
@@ -120,33 +99,29 @@ export default async function BillingPage({
                 <TableHead>Reader</TableHead>
                 <TableHead>Unit &amp; Center</TableHead>
                 <TableHead>POC</TableHead>
-                <TableHead>Charge</TableHead>
-                <TableHead>Outstanding</TableHead>
-                <TableHead>Billing Period</TableHead>
+                <TableHead>Amount Due</TableHead>
                 <TableHead>Last Payment</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
-              {cycles.map((c) => (
-                <TableRow key={c.id}>
+              {rows.map((r) => (
+                <TableRow key={r.readerId}>
                   <TableCell>
-                    {c.readerName}
-                    <div className="text-xs text-muted-foreground">{c.readerCode}</div>
+                    {r.readerName}
+                    <div className="text-xs text-muted-foreground">{r.readerCode}</div>
                   </TableCell>
                   <TableCell>
-                    {c.unitName} / {c.centerName}
+                    {r.unitName} / {r.centerName}
                   </TableCell>
-                  <TableCell>{c.pocName ?? "—"}</TableCell>
-                  <TableCell>₹{c.amount}</TableCell>
-                  <TableCell>₹{c.outstandingBalance}</TableCell>
-                  <TableCell>{c.billingPeriod}</TableCell>
-                  <TableCell>{c.lastPaymentDate ?? "—"}</TableCell>
+                  <TableCell>{r.pocName ?? "—"}</TableCell>
+                  <TableCell>{formatAmountDue(r.amountDue)}</TableCell>
+                  <TableCell>{r.lastPaymentDate ?? "—"}</TableCell>
                 </TableRow>
               ))}
-              {cycles.length === 0 && (
+              {rows.length === 0 && (
                 <TableRow>
-                  <TableCell colSpan={7} className="text-center text-muted-foreground">
-                    No payment cycles found.
+                  <TableCell colSpan={5} className="text-center text-muted-foreground">
+                    No readers found.
                   </TableCell>
                 </TableRow>
               )}

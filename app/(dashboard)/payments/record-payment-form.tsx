@@ -5,6 +5,7 @@ import { recordPaymentAction, type RecordPaymentState } from "./actions";
 import { Field, FieldLabel, FieldGroup } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
+import { Checkbox } from "@/components/ui/checkbox";
 import { Alert, AlertTitle, AlertDescription } from "@/components/ui/alert";
 import {
   Select,
@@ -70,6 +71,10 @@ export function RecordPaymentForm({ readerId }: { readerId: number }) {
           <FieldLabel htmlFor="remarks">Remarks (optional)</FieldLabel>
           <Input id="remarks" name="remarks" />
         </Field>
+        <label className="flex items-center gap-2 text-sm">
+          <Checkbox name="inProcess" value="true" />
+          Mark as in-process (pending verification — e.g. cash not yet deposited, cheque not yet cleared)
+        </label>
       </FieldGroup>
       <Button type="submit" disabled={pending} className="self-start">
         {pending ? "Recording..." : "Record Payment"}

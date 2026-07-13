@@ -11,6 +11,7 @@ import { Input } from "@/components/ui/input";
 import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem, SelectGroup } from "@/components/ui/select";
 import { bulkDeleteReadersAction, bulkTransferReadersAction, bulkUpdateReaderStatusAction, bulkUpdateReaderLandmarkAction } from "./actions";
 import { sendBulkPaymentLinksAction, type BulkSendResult } from "../payments/actions";
+import { formatAmountDue } from "@/lib/billing/format";
 
 type Reader = {
   id: number;
@@ -21,7 +22,7 @@ type Reader = {
   centerName: string;
   pocName: string | null;
   subscriptionStartDate: string;
-  outstandingBalance: string;
+  amountDue: number;
   status: "active" | "inactive";
 };
 
@@ -202,7 +203,7 @@ export function ReaderTable({ readers, isAdmin, centers = [] }: { readers: Reade
             <TableHead>Center</TableHead>
             <TableHead>POC</TableHead>
             <TableHead>Subscription Start</TableHead>
-            <TableHead>Outstanding</TableHead>
+            <TableHead>Amount Due</TableHead>
             <TableHead>Status</TableHead>
           </TableRow>
         </TableHeader>
@@ -229,7 +230,7 @@ export function ReaderTable({ readers, isAdmin, centers = [] }: { readers: Reade
               <TableCell>{reader.centerName}</TableCell>
               <TableCell>{reader.pocName ?? "—"}</TableCell>
               <TableCell>{reader.subscriptionStartDate}</TableCell>
-              <TableCell>₹{reader.outstandingBalance}</TableCell>
+              <TableCell>{formatAmountDue(reader.amountDue)}</TableCell>
               <TableCell>
                 <Badge variant={reader.status === "active" ? "secondary" : "outline"}>{reader.status}</Badge>
               </TableCell>

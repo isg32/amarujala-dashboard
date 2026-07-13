@@ -53,3 +53,25 @@ export async function toggleAttendanceAction(
     return { error: e instanceof Error ? e.message : "Failed to update attendance." };
   }
 }
+
+// Multi-day version for the calendar's Shift+Arrow range selection —
+// dateFrom/dateTo are always clamped by the calendar to enabled (non-future,
+// post-subscription) days before this is called.
+export async function markAttendanceRangeAction(
+  readerId: number,
+  dateFrom: string,
+  dateTo: string,
+  status: "delivered" | "not_delivered"
+): Promise<{ error: string } | { markedDays: number }> {
+  try {
+    dateSchema.parse(dateFrom);
+    dateSchema.parse(dateTo);
+    statusSchema.parse(status);
+    const { markedDays } = await markAttendanceForReader({ readerId, dateFrom, dateTo, status });
+    revalidatePath(`/readers/${readerId}`);
+    revalidatePath("/attendance");
+    return { markedDays };
+  } catch (e) {
+    return { error: e instanceof Error ? e.message : "Failed to update attendance." };
+  }
+}

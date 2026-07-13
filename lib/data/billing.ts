@@ -1,5 +1,5 @@
 import "server-only";
-import { and, desc, eq, gt, gte, ilike, isNull, lte, max, notInArray, or, sql } from "drizzle-orm";
+import { and, desc, eq, gte, ilike, inArray, lte, max, or, sql } from "drizzle-orm";
 import { requireAdmin, requireAppUser, type AppUser } from "@/lib/auth/session";
 import { db } from "@/lib/db";
 import {
@@ -16,10 +16,8 @@ import {
 } from "@/lib/db/schema";
 import { assertCenterInScope } from "./readers";
 import {
-  calculateMonthCharge,
   calculateCycleCharge,
   getBillingCycle,
-  daysInMonth,
   type PricePeriod,
   type AttendanceStatus,
 } from "@/lib/billing/calculate";
@@ -46,6 +44,7 @@ async function getReaderBillingContext(readerId: number) {
       unitId: cities.unitId,
       subscriptionStartDate: readers.subscriptionStartDate,
       billingAnchorDay: readers.billingAnchorDay,
+      status: readers.status,
     })
     .from(readers)
     .innerJoin(centers, eq(readers.centerId, centers.id))
@@ -152,7 +151,19 @@ export async function getCurrentMonthProvisional(readerId: number) {
   return { billingPeriod, cycleStart, cycleEnd, amount };
 }
 
-// Shared by getCurrentMonthProvisional and closeReaderCycle: the currently
+// The one number admin actually cares about: everything already posted to
+// the ledger (readers.outstanding_balance) plus today's live, never-posted
+// provisional charge — so it's always accurate without needing a Close Month
+// click. Negative means the reader is in credit (see reader-table.tsx /
+// reader-profile-card.tsx for the "Credit" display treatment).
+export async function getAmountDue(readerId: number): Promise<number> {
+  const provisional = await getCurrentMonthProvisional(readerId); // does the scope check
+  const [row] = await db.select({ outstandingBalance: readers.outstandingBalance }).from(readers).where(eq(readers.id, readerId));
+  if (!row) throw new Error("Reader not found.");
+  return Math.round((Number(row.outstandingBalance) + provisional.amount) * 100) / 100;
+}
+
+// Shared by getCurrentMonthProvisional and closeSubscription: the currently
 // open cycle for a reader, calendar-month by default or anchor-day-based if
 // set. billingPeriod is the ledger's 'YYYY-MM' label — for anchor-day
 // readers this is the cycle's start month, not necessarily today's month.
@@ -185,165 +196,79 @@ export async function listLedgerForReader(readerId: number) {
     .orderBy(readerBillingLedger.createdAt);
 }
 
-export interface CloseMonthResult {
+export interface CloseSubscriptionResult {
   billingPeriod: string;
-  chargedCount: number;
-  skippedAlreadyClosedCount: number;
-}
-
-// Admin-triggered (no cron dependency for v1). Writes one immutable
-// monthly_charge ledger entry per reader for billingPeriod, skipping any
-// reader who already has one for that period (idempotent — safe to
-// re-trigger). The partial unique index on (reader_id, billing_period)
-// backs this up at the DB level as a second line of defense.
-export async function closeMonth(billingPeriod: string): Promise<CloseMonthResult> {
-  const user = await requireAdmin();
-
-  const monthEnd = billingPeriod + "-31"; // loose upper bound, date comparisons below don't need exactness
-  const [closeYear, closeMonthNum] = billingPeriod.split("-").map(Number);
-  const realMonthEnd = `${billingPeriod}-${String(daysInMonth(closeYear, closeMonthNum)).padStart(2, "0")}`;
-  const alreadyCharged = await db
-    .select({ readerId: readerBillingLedger.readerId })
-    .from(readerBillingLedger)
-    .where(and(eq(readerBillingLedger.entryType, "monthly_charge"), eq(readerBillingLedger.billingPeriod, billingPeriod)));
-  const alreadyChargedIds = alreadyCharged.map((r) => r.readerId);
-
-  const eligibleReaders = await db
-    .select({
-      id: readers.id,
-      centerId: readers.centerId,
-      cityId: centers.cityId,
-      unitId: cities.unitId,
-      subscriptionStartDate: readers.subscriptionStartDate,
-    })
-    .from(readers)
-    .innerJoin(centers, eq(readers.centerId, centers.id))
-    .innerJoin(cities, eq(centers.cityId, cities.id))
-    .where(
-      and(
-        // Readers on a custom billing-cycle anchor day close individually
-        // via closeReaderCycle(), not through this org-wide calendar-month run.
-        isNull(readers.billingAnchorDay),
-        lte(readers.subscriptionStartDate, monthEnd),
-        alreadyChargedIds.length > 0 ? notInArray(readers.id, alreadyChargedIds) : undefined
-      )
-    );
-
-  const cityIds = [...new Set(eligibleReaders.map((r) => r.cityId))];
-  const pricingByCityId = new Map<number, PricePeriod[]>(
-    await Promise.all(cityIds.map(async (cityId) => [cityId, await getCityPricingHistory(cityId)] as const))
-  );
-  const overrideRows = await db.select().from(pricingOverrides).where(eq(pricingOverrides.active, true));
-
-  const monthStart = `${billingPeriod}-01`;
-  let chargedCount = 0;
-
-  await db.transaction(async (tx) => {
-    for (const reader of eligibleReaders) {
-      const attendanceMap = await getAttendanceMap(reader.id, monthStart, monthEnd);
-      const overrides = resolveOverridesForContext(overrideRows, reader.centerId, reader.unitId);
-      const amount = calculateMonthCharge({
-        billingPeriod,
-        subscriptionStartDate: reader.subscriptionStartDate,
-        attendance: attendanceMap,
-        pricingHistory: pricingByCityId.get(reader.cityId) ?? [],
-        today: monthEnd, // force full-month billing regardless of when Close Month is actually clicked
-        unmarkedDefault: unmarkedDefaultFor(monthStart),
-        ...overrides,
-      });
-      // Always post, even for a $0 charge: this is what makes the period
-      // "closed" for this reader (backs the idempotency check above) and
-      // keeps the audit trail explicit rather than silently absent.
-      await postLedgerEntry(
-        {
-          readerId: reader.id,
-          entryType: "monthly_charge",
-          amount,
-          billingPeriod,
-          entryDate: realMonthEnd,
-          description: `Month close ${billingPeriod}`,
-          createdBy: user.id,
-        },
-        tx
-      );
-      chargedCount++;
-    }
-  });
-
-  return { billingPeriod, chargedCount, skippedAlreadyClosedCount: alreadyChargedIds.length };
-}
-
-export interface CloseReaderCycleResult {
-  billingPeriod: string;
-  cycleStart: string;
-  cycleEnd: string;
   amount: number;
-  alreadyClosed: boolean;
 }
 
-// Admin-triggered, per-reader equivalent of closeMonth() for a reader on a
-// custom billingAnchorDay — since each such reader's cycle boundary is a
-// different date, there's no single shared "period" to close them all at
-// once the way the calendar-month readers have. Closes the most recently
-// *completed* cycle (the one immediately before the currently open one).
-// Idempotent per (reader, billingPeriod) via the same ledger unique index
-// closeMonth relies on.
-export async function closeReaderCycle(readerId: number): Promise<CloseReaderCycleResult> {
+// Replaces the old periodic Close Month / closeReaderCycle ritual — billing
+// no longer requires a recurring admin click (see getAmountDue() below for
+// the live running total shown everywhere instead). This is only for when a
+// reader's subscription actually ends: it posts ONE final ledger charge for
+// everything accrued since their last posted monthly_charge (or subscription
+// start if they were never billed), then marks them inactive. Idempotent in
+// the sense that closing an already-inactive reader is rejected outright
+// rather than double-charging them.
+export async function closeSubscription(readerId: number): Promise<CloseSubscriptionResult> {
   const user = await requireAdmin();
   const context = await getReaderBillingContext(readerId);
-  if (context.billingAnchorDay == null) {
-    throw new Error("This reader bills on the calendar month — use Close Month instead.");
+  if (context.status === "inactive") {
+    throw new Error("This reader's subscription is already closed.");
   }
 
   const today = new Date().toISOString().slice(0, 10);
-  const currentCycle = getBillingCycle(context.billingAnchorDay, today);
-  const dayBeforeCurrentCycle = new Date(currentCycle.cycleStart + "T00:00:00Z");
-  dayBeforeCurrentCycle.setUTCDate(dayBeforeCurrentCycle.getUTCDate() - 1);
-  const referenceDate = dayBeforeCurrentCycle.toISOString().slice(0, 10);
 
-  const { cycleStart, cycleEnd } = getBillingCycle(context.billingAnchorDay, referenceDate);
-  const billingPeriod = cycleStart.slice(0, 7);
-
-  const [existing] = await db
-    .select({ id: readerBillingLedger.id })
+  const [lastCharge] = await db
+    .select({ entryDate: readerBillingLedger.entryDate })
     .from(readerBillingLedger)
-    .where(
-      and(
-        eq(readerBillingLedger.readerId, readerId),
-        eq(readerBillingLedger.entryType, "monthly_charge"),
-        eq(readerBillingLedger.billingPeriod, billingPeriod)
-      )
-    );
-  if (existing) return { billingPeriod, cycleStart, cycleEnd, amount: 0, alreadyClosed: true };
+    .where(and(eq(readerBillingLedger.readerId, readerId), eq(readerBillingLedger.entryType, "monthly_charge")))
+    .orderBy(desc(readerBillingLedger.entryDate))
+    .limit(1);
+
+  let periodStart = context.subscriptionStartDate;
+  if (lastCharge) {
+    const d = new Date(lastCharge.entryDate + "T00:00:00Z");
+    d.setUTCDate(d.getUTCDate() + 1);
+    periodStart = d.toISOString().slice(0, 10);
+  }
+  if (periodStart > today) periodStart = today; // already fully billed through today; post a $0 close
+
+  const billingPeriod = today.slice(0, 7);
 
   const [pricingHistory, attendanceMap, overrides] = await Promise.all([
     getCityPricingHistory(context.cityId),
-    getAttendanceMap(readerId, cycleStart, cycleEnd),
+    getAttendanceMap(readerId, periodStart, today),
     getPriceOverridesFor(context.centerId, context.unitId),
   ]);
 
   const amount = calculateCycleCharge({
-    cycleStart,
-    cycleEnd,
+    cycleStart: periodStart,
+    cycleEnd: today,
     subscriptionStartDate: context.subscriptionStartDate,
     attendance: attendanceMap,
     pricingHistory,
-    today: cycleEnd, // force the full completed cycle regardless of when this is clicked
-    unmarkedDefault: unmarkedDefaultFor(cycleStart),
+    today,
+    unmarkedDefault: unmarkedDefaultFor(periodStart),
     ...overrides,
   });
 
-  await postLedgerEntry({
-    readerId,
-    entryType: "monthly_charge",
-    amount,
-    billingPeriod,
-    entryDate: cycleEnd,
-    description: `Cycle close ${cycleStart} – ${cycleEnd}`,
-    createdBy: user.id,
+  await db.transaction(async (tx) => {
+    await postLedgerEntry(
+      {
+        readerId,
+        entryType: "monthly_charge",
+        amount,
+        billingPeriod,
+        entryDate: today,
+        description: `Subscription closed ${periodStart} – ${today}`,
+        createdBy: user.id,
+      },
+      tx
+    );
+    await tx.update(readers).set({ status: "inactive" }).where(eq(readers.id, readerId));
   });
 
-  return { billingPeriod, cycleStart, cycleEnd, amount, alreadyClosed: false };
+  return { billingPeriod, amount };
 }
 
 function scopeToCenters(user: AppUser) {
@@ -352,68 +277,113 @@ function scopeToCenters(user: AppUser) {
   return sql`${readers.centerId} in (${sql.join(user.centerIds, sql`, `)})`;
 }
 
-export type BillingCycleFilters = {
+export type ReaderAmountDueFilters = {
   search?: string;
   centerId?: number;
-  billingPeriod?: string; // 'YYYY-MM'
-  status?: "due" | "paid";
+  status?: "due" | "paid"; // based on the same live amount this returns, not a stale stored value
 };
 
-// Cross-reader "All Payment Cycles" style view — one row per reader per
-// closed billing period. Our data model doesn't track per-period paid
-// amounts the way a discrete "payment cycle" record would (payments reduce
-// a running balance, not a specific period's due amount), so "status" here
-// is necessarily an approximation: it reflects the reader's *current*
-// overall outstanding balance, not whether this specific period was paid.
-// Good enough for "who still owes something" triage; not a per-period
-// reconciliation tool.
-export async function listBillingCycles(filters: BillingCycleFilters = {}) {
+// Replaces the old ledger-driven "payment cycles" list now that billing
+// doesn't require a periodic Close Month click — this is reader-centric (one
+// row per reader), with Amount Due computed live the same way getAmountDue()
+// does, just batched across every matching reader instead of one at a time:
+// city pricing and active overrides are fetched once, and attendance is
+// fetched in a single query over a 31-day window (covers every possible
+// anchor-day cycleStart) instead of one query per reader.
+export async function listReadersWithAmountDue(filters: ReaderAmountDueFilters = {}) {
   const user = await requireAppUser();
 
-  const conditions = [eq(readerBillingLedger.entryType, "monthly_charge"), scopeToCenters(user)];
+  const conditions = [scopeToCenters(user)];
   if (filters.search) {
     const term = `%${filters.search}%`;
     conditions.push(or(ilike(readers.name, term), ilike(readers.mobile, term), ilike(readers.readerCode, term)));
   }
   if (filters.centerId) conditions.push(eq(readers.centerId, filters.centerId));
-  if (filters.billingPeriod) conditions.push(eq(readerBillingLedger.billingPeriod, filters.billingPeriod));
-  if (filters.status === "due") conditions.push(gt(readers.outstandingBalance, "0"));
-  if (filters.status === "paid") conditions.push(lte(readers.outstandingBalance, "0"));
 
   const rows = await db
     .select({
-      id: readerBillingLedger.id,
-      readerId: readers.id,
+      id: readers.id,
       readerName: readers.name,
       readerCode: readers.readerCode,
+      centerId: readers.centerId,
+      cityId: centers.cityId,
+      unitId: cities.unitId,
       unitName: units.name,
       centerName: centers.name,
       pocName: appUsers.name,
-      amount: readerBillingLedger.amount,
+      subscriptionStartDate: readers.subscriptionStartDate,
+      billingAnchorDay: readers.billingAnchorDay,
       outstandingBalance: readers.outstandingBalance,
-      billingPeriod: readerBillingLedger.billingPeriod,
     })
-    .from(readerBillingLedger)
-    .innerJoin(readers, eq(readerBillingLedger.readerId, readers.id))
+    .from(readers)
     .innerJoin(centers, eq(readers.centerId, centers.id))
     .innerJoin(cities, eq(centers.cityId, cities.id))
     .innerJoin(units, eq(cities.unitId, units.id))
     .leftJoin(appUsers, eq(readers.assignedPocId, appUsers.id))
-    .where(and(...conditions.filter((c) => c !== undefined)))
-    .orderBy(desc(readerBillingLedger.billingPeriod), desc(readerBillingLedger.id));
+    .where(and(...conditions.filter((c) => c !== undefined)));
 
   if (rows.length === 0) return [];
 
-  // Separate query (not joined into the above) to avoid join fan-out
-  // inflating the charge amounts — see the same lesson already documented
-  // for lib/data/reports.ts's getGroupedReport().
-  const readerIds = [...new Set(rows.map((r) => r.readerId))];
+  const today = new Date().toISOString().slice(0, 10);
+  const cityIds = [...new Set(rows.map((r) => r.cityId))];
+  const pricingByCityId = new Map<number, PricePeriod[]>(
+    await Promise.all(cityIds.map(async (cityId) => [cityId, await getCityPricingHistory(cityId)] as const))
+  );
+  const overrideRows = await db.select().from(pricingOverrides).where(eq(pricingOverrides.active, true));
+
+  const windowStart = new Date(today + "T00:00:00Z");
+  windowStart.setUTCDate(windowStart.getUTCDate() - 31);
+  const windowStartStr = windowStart.toISOString().slice(0, 10);
+  const readerIds = rows.map((r) => r.id);
+  const attendanceRows = await db
+    .select({ readerId: attendance.readerId, attendanceDate: attendance.attendanceDate, status: attendance.status })
+    .from(attendance)
+    .where(and(inArray(attendance.readerId, readerIds), gte(attendance.attendanceDate, windowStartStr), lte(attendance.attendanceDate, today)));
+  const attendanceByReader = new Map<number, Record<string, AttendanceStatus>>();
+  for (const a of attendanceRows) {
+    if (!attendanceByReader.has(a.readerId)) attendanceByReader.set(a.readerId, {});
+    attendanceByReader.get(a.readerId)![a.attendanceDate] = a.status;
+  }
+
   const lastPayments = await db
     .select({ readerId: payments.readerId, lastPaymentDate: max(payments.paymentDate) })
     .from(payments)
-    .where(sql`${payments.readerId} in (${sql.join(readerIds, sql`, `)})`)
+    .where(inArray(payments.readerId, readerIds))
     .groupBy(payments.readerId);
   const lastPaymentByReader = new Map(lastPayments.map((p) => [p.readerId, p.lastPaymentDate]));
 
-  return rows.map((r) => ({ ...r, lastPaymentDate: lastPaymentByReader.get(r.readerId) ?? null }));
+  const allRows = rows.map((r) => {
+    const { cycleStart, cycleEnd } = currentCycleFor(r.billingAnchorDay, today);
+    const overrides = resolveOverridesForContext(overrideRows, r.centerId, r.unitId);
+    const provisional = calculateCycleCharge({
+      cycleStart,
+      cycleEnd,
+      subscriptionStartDate: r.subscriptionStartDate,
+      attendance: attendanceByReader.get(r.id) ?? {},
+      pricingHistory: pricingByCityId.get(r.cityId) ?? [],
+      today,
+      unmarkedDefault: unmarkedDefaultFor(cycleStart),
+      ...overrides,
+    });
+    const amountDue = Math.round((Number(r.outstandingBalance) + provisional) * 100) / 100;
+    return {
+      readerId: r.id,
+      readerName: r.readerName,
+      readerCode: r.readerCode,
+      unitName: r.unitName,
+      centerName: r.centerName,
+      pocName: r.pocName,
+      amountDue,
+      lastPaymentDate: lastPaymentByReader.get(r.id) ?? null,
+    };
+  });
+
+  const filtered =
+    filters.status === "due"
+      ? allRows.filter((r) => r.amountDue > 0)
+      : filters.status === "paid"
+        ? allRows.filter((r) => r.amountDue <= 0)
+        : allRows;
+
+  return filtered.sort((a, b) => b.amountDue - a.amountDue);
 }

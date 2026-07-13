@@ -8,6 +8,7 @@ import { assertCenterInScope } from "./readers";
 import { postLedgerEntry } from "@/lib/billing/ledger";
 import { PAYU_GATEWAY_ENABLED } from "@/lib/payu/config";
 import { applyCoupon } from "./coupons";
+import { getAmountDue } from "./billing";
 
 export type PaymentMethod = "cash" | "upi" | "bank_transfer" | "razorpay" | "payu" | "other";
 
@@ -25,6 +26,8 @@ export interface RecordPaymentInput {
   transactionReference?: string;
   remarks?: string;
   paymentDate: string;
+  /** Manual methods only — see payments.inProcess in lib/db/schema.ts. */
+  inProcess?: boolean;
 }
 
 // Available to both roles (AU POCs can "Record payments" per the FRD),
@@ -51,6 +54,7 @@ export async function recordPayment(input: RecordPaymentInput) {
         remarks: input.remarks,
         paymentDate: input.paymentDate,
         recordedBy: user.id,
+        inProcess: input.inProcess ?? false,
       })
       .returning({ id: payments.id });
 
@@ -127,7 +131,11 @@ export async function createPaymentLink(
   const [reader] = await db.select().from(readers).where(eq(readers.id, readerId));
   if (!reader) throw new Error("Reader not found.");
 
-  let balance = Number(reader.outstandingBalance);
+  // Live amount due (posted ledger balance + today's unbilled provisional
+  // charge) — reader.outstandingBalance alone would miss everything accrued
+  // since the last Close Subscription/historical close, which is most of it
+  // now that billing doesn't require a periodic close.
+  let balance = await getAmountDue(readerId);
 
   if (options.voucherCouponId) {
     const [coupon] = await db.select().from(coupons).where(eq(coupons.id, options.voucherCouponId));
@@ -278,6 +286,8 @@ export async function listPaymentTransactions(filters: PaymentTransactionFilters
       readerCode: readers.readerCode,
       centerName: centers.name,
       cityName: cities.name,
+      reversed: payments.reversed,
+      inProcess: payments.inProcess,
     })
     .from(payments)
     .innerJoin(readers, eq(payments.readerId, readers.id))

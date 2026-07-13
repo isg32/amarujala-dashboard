@@ -47,6 +47,7 @@ export function SendPaymentLinkButton({
   const [testMobile, setTestMobile] = useState("");
   const [generatedLink, setGeneratedLink] = useState<GeneratedPaymentLink | null>(null);
   const [generateError, setGenerateError] = useState<string | null>(null);
+  const [copied, setCopied] = useState(false);
 
   // Any option change invalidates a previously generated link — never let
   // "Send" fire an SMS whose amount/dates no longer match what's on screen.
@@ -236,9 +237,23 @@ export function SendPaymentLinkButton({
       {generatedLink && (
         <div className="flex max-w-80 flex-col gap-1 rounded-md border p-2 text-right text-xs">
           <span className="text-muted-foreground">Real link generated — review before sending:</span>
-          <a href={generatedLink.payUrl} target="_blank" rel="noreferrer" className="break-all underline">
-            {generatedLink.payUrl}
-          </a>
+          <div className="flex items-center justify-end gap-2">
+            <a href={generatedLink.payUrl} target="_blank" rel="noreferrer" className="break-all underline">
+              {generatedLink.payUrl}
+            </a>
+            <Button
+              type="button"
+              variant="ghost"
+              size="xs"
+              onClick={() => {
+                navigator.clipboard.writeText(generatedLink.payUrl);
+                setCopied(true);
+                setTimeout(() => setCopied(false), 2000);
+              }}
+            >
+              {copied ? "Copied!" : "Copy"}
+            </Button>
+          </div>
           <p className="rounded bg-muted p-2 text-left text-muted-foreground">{generatedLink.message}</p>
         </div>
       )}

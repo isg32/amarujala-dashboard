@@ -281,6 +281,12 @@ export const payments = pgTable("payments", {
     .notNull()
     .references(() => appUsers.id),
   reversed: boolean("reversed").notNull().default(false),
+  // Manual payments only (cash/UPI/bank transfer/other) — self-reported by a
+  // POC/admin, not independently verified the way PayU/Razorpay are. Posts
+  // to the ledger immediately like any other payment; this just flags it for
+  // admin follow-up (find it in Payment History, reverse if it turns out the
+  // cash/cheque never actually cleared) rather than blocking the balance.
+  inProcess: boolean("in_process").notNull().default(false),
   createdAt: timestamp("created_at").notNull().defaultNow(),
 });
 

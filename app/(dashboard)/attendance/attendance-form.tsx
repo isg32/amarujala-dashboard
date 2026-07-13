@@ -111,7 +111,7 @@ export function AttendanceForm({
           <Select
             name="status"
             defaultValue="delivered"
-            items={{ delivered: "Delivered", not_delivered: "Not Delivered (Absent)" }}
+            items={{ delivered: "Delivered", not_delivered: "Undelivered" }}
           >
             <SelectTrigger id="status" className="w-full">
               <SelectValue />
@@ -119,7 +119,7 @@ export function AttendanceForm({
             <SelectContent>
               <SelectGroup>
                 <SelectItem value="delivered">Delivered</SelectItem>
-                <SelectItem value="not_delivered">Not Delivered (Absent)</SelectItem>
+                <SelectItem value="not_delivered">Undelivered</SelectItem>
               </SelectGroup>
             </SelectContent>
           </Select>

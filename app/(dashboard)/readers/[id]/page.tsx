@@ -15,8 +15,9 @@ import { AttendanceCalendar } from "./attendance-calendar";
 import { ApplyCouponForm } from "../../coupons/apply-coupon-form";
 import { SendReminderButton } from "./send-reminder-button";
 import { BillingCycleForm } from "./billing-cycle-form";
-import { CloseReaderCycleButton } from "./close-reader-cycle-button";
+import { CloseSubscriptionButton } from "./close-subscription-button";
 import { ReaderProfileCard } from "./reader-profile-card";
+import { formatAmountDue } from "@/lib/billing/format";
 
 const LEDGER_LABELS: Record<string, string> = {
   monthly_charge: "Monthly Charge",
@@ -56,6 +57,7 @@ export default async function ReaderProfilePage({
       isAdmin ? listCoupons() : Promise.resolve([]),
       listTransfersForReader(reader.id),
     ]);
+  const amountDue = Math.round((Number(reader.outstandingBalance) + provisional.amount) * 100) / 100;
 
   return (
     <div className="flex flex-col gap-6 overflow-x-auto">
@@ -69,7 +71,7 @@ export default async function ReaderProfilePage({
             {isAdmin && (
               <SendPaymentLinkButton
                 readerId={reader.id}
-                outstandingBalance={reader.outstandingBalance}
+                outstandingBalance={amountDue.toFixed(2)}
                 coupons={availableCoupons}
               />
             )}
@@ -91,14 +93,17 @@ export default async function ReaderProfilePage({
         <CardHeader>
           <CardTitle>Billing</CardTitle>
           <p className="text-sm text-muted-foreground">
-            Current cycle ({provisional.cycleStart} – {provisional.cycleEnd}, provisional): ₹
-            {provisional.amount.toFixed(2)}
+            Amount Due (live, updates automatically — no Close Month needed): {formatAmountDue(amountDue)}
+            <br />
+            <span className="text-xs">
+              Current cycle ({provisional.cycleStart} – {provisional.cycleEnd}, unbilled): ₹{provisional.amount.toFixed(2)}
+            </span>
           </p>
         </CardHeader>
         {isAdmin && (
           <CardContent className="flex flex-wrap items-center justify-between gap-3 border-b pb-4 text-sm">
             <BillingCycleForm readerId={reader.id} billingAnchorDay={reader.billingAnchorDay} />
-            {reader.billingAnchorDay != null && <CloseReaderCycleButton readerId={reader.id} />}
+            {reader.status === "active" && <CloseSubscriptionButton readerId={reader.id} readerName={reader.name} />}
           </CardContent>
         )}
         <CardContent>
@@ -126,7 +131,7 @@ export default async function ReaderProfilePage({
 
       <Card>
         <CardHeader>
-          <CardTitle>Payments</CardTitle>
+          <CardTitle>Update for Manual Payment</CardTitle>
         </CardHeader>
         <CardContent className="flex flex-col gap-4">
           {(isAdmin || currentUser?.permissions.canRecordPayments) && <RecordPaymentForm readerId={reader.id} />}
@@ -135,7 +140,14 @@ export default async function ReaderProfilePage({
               {paymentRows.map((p) => (
                 <div key={p.id} className="flex items-center justify-between border-b pb-1.5 last:border-0">
                   <div>
-                    <div className={p.reversed ? "text-muted-foreground line-through" : ""}>{p.paymentDate}</div>
+                    <div className={p.reversed ? "text-muted-foreground line-through" : ""}>
+                      {p.paymentDate}
+                      {p.inProcess && !p.reversed && (
+                        <span className="ml-2 rounded bg-secondary px-1.5 py-0.5 text-xs text-secondary-foreground">
+                          In Process
+                        </span>
+                      )}
+                    </div>
                     <div className="text-xs text-muted-foreground">
                       {METHOD_LABELS[p.method] ?? p.method}
                       {p.transactionReference ? ` — Ref: ${p.transactionReference}` : ""}

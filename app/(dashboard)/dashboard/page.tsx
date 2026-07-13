@@ -41,7 +41,7 @@ export default async function DashboardHome() {
         <h2 className="mb-3 text-sm font-medium text-muted-foreground">Delivery</h2>
         <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
           <Tile label="Delivered Today" value={kpis.delivery.deliveredToday} />
-          <Tile label="Absent Today" value={kpis.delivery.absentToday} />
+          <Tile label="Undelivered Today" value={kpis.delivery.absentToday} />
           <Tile label="Monthly Delivery %" value={`${kpis.delivery.monthlyDeliveryPercent}%`} />
         </div>
       </section>

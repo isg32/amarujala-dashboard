@@ -71,7 +71,7 @@ export async function GET(request: Request, { params }: { params: Promise<{ type
         Name: r.name,
         Center: r.centerName,
         Delivered: r.delivered,
-        Absent: r.absent,
+        Undelivered: r.absent,
       }));
       break;
     }

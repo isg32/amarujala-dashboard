@@ -51,7 +51,7 @@ export default async function AttendancePage({
       <Card>
         <CardHeader>
           <CardTitle>Quick Mark (Calendar)</CardTitle>
-          <CardDescription>Pick a reader and click any day to toggle it between Delivered and Absent.</CardDescription>
+          <CardDescription>Pick a reader and click any day to toggle it between Delivered and Undelivered.</CardDescription>
         </CardHeader>
         <CardContent className="flex flex-col gap-4">
           <ReaderPicker readerOptions={readerOptions} selectedReaderId={selectedReaderId} />

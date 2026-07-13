@@ -2,6 +2,7 @@ import Link from "next/link";
 import { getCurrentAppUser } from "@/lib/auth/session";
 import { listReadersPaginated, listAssignableCentersWithPocs } from "@/lib/data/readers";
 import { listUnits } from "@/lib/data/master-data";
+import { getAmountDue } from "@/lib/data/billing";
 import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
@@ -65,6 +66,13 @@ export default async function ReadersPage({
     // listUnits() is requireAdmin()-gated; AU POCs don't get a Unit filter.
     isAdmin ? listUnits() : Promise.resolve([]),
   ]);
+
+  // Live Amount Due (posted balance + today's unbilled provisional) per row
+  // — capped at PAGE_SIZE readers, so a Promise.all of single-reader lookups
+  // is simpler than the batched query listReadersWithAmountDue uses for an
+  // unbounded/whole-org listing.
+  const amountsDue = await Promise.all(readerRows.map((r) => getAmountDue(r.id)));
+  const readerRowsWithAmountDue = readerRows.map((r, i) => ({ ...r, amountDue: amountsDue[i] }));
 
   const exportQuery = new URLSearchParams();
   if (params.search) exportQuery.set("search", params.search);
@@ -190,7 +198,7 @@ export default async function ReadersPage({
 
       <Card>
         <CardContent>
-          <ReaderTable readers={readerRows} isAdmin={isAdmin} centers={centers} />
+          <ReaderTable readers={readerRowsWithAmountDue} isAdmin={isAdmin} centers={centers} />
         </CardContent>
       </Card>
 

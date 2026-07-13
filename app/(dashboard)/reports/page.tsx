@@ -249,7 +249,7 @@ async function ReportTable({
             <TableHead>Reader</TableHead>
             <TableHead>Center</TableHead>
             <TableHead>Delivered</TableHead>
-            <TableHead>Absent</TableHead>
+            <TableHead>Undelivered</TableHead>
           </TableRow>
         </TableHeader>
         <TableBody>
