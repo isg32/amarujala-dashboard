@@ -131,15 +131,27 @@ export interface PaymentLinkDateOverride {
   endDate?: string;
 }
 
+export interface PaymentLinkAmountOverride {
+  /** The real link amount (from createPaymentLink's return value) — always
+   * pass this once a real payment_intent exists, since it can differ from
+   * reader.outstandingBalance (a voucher discount or manual override can
+   * make the actual link amount different from the reader's raw balance). */
+  amount?: string;
+}
+
 // Shared by the real send and the preview below so the two can never drift
 // apart.
-function buildPaymentLinkVariables(reader: ReminderReader, payUrl: string, dates?: PaymentLinkDateOverride) {
+function buildPaymentLinkVariables(
+  reader: ReminderReader,
+  payUrl: string,
+  opts?: PaymentLinkDateOverride & PaymentLinkAmountOverride
+) {
   const now = new Date();
   return {
     name: reader.name,
-    amount: reader.outstandingBalance,
-    startDate: dates?.startDate || startOfMonth(now),
-    endDate: dates?.endDate || endOfMonth(now),
+    amount: opts?.amount ?? reader.outstandingBalance,
+    startDate: opts?.startDate || startOfMonth(now),
+    endDate: opts?.endDate || endOfMonth(now),
     payUrl,
   };
 }
@@ -147,9 +159,13 @@ function buildPaymentLinkVariables(reader: ReminderReader, payUrl: string, dates
 // Renders the exact text sendPaymentLinkSms would send, without sending
 // anything — lets an admin check the date range, link, and template wording
 // before a real SMS (and real SMS-provider cost) goes out.
-export async function previewPaymentLinkMessage(reader: ReminderReader, payUrl: string, dates?: PaymentLinkDateOverride) {
+export async function previewPaymentLinkMessage(
+  reader: ReminderReader,
+  payUrl: string,
+  opts?: PaymentLinkDateOverride & PaymentLinkAmountOverride
+) {
   const templateText = await getTemplateText("payment_link");
-  return renderTemplate(templateText, buildPaymentLinkVariables(reader, payUrl, dates));
+  return renderTemplate(templateText, buildPaymentLinkVariables(reader, payUrl, opts));
 }
 
 export async function sendPaymentReminder(reader: ReminderReader): Promise<SendSmsResult> {
@@ -170,7 +186,7 @@ export async function sendPaymentReminder(reader: ReminderReader): Promise<SendS
 export async function sendPaymentLinkSms(
   reader: ReminderReader,
   payUrl: string,
-  options?: PaymentLinkDateOverride & { testMobile?: string }
+  options?: PaymentLinkDateOverride & PaymentLinkAmountOverride & { testMobile?: string }
 ): Promise<SendSmsResult> {
   const variables = buildPaymentLinkVariables(reader, payUrl, options);
   return sendSms(options?.testMobile || reader.mobile, "payment_link", variables);

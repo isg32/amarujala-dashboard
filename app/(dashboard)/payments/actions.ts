@@ -49,74 +49,64 @@ export type SendPaymentLinkOptions = {
   testMobile?: string;
 };
 
-// Admin-only (createPaymentLink enforces this via requireAdmin). Generates
-// the PayU link and sends it to the reader (or, in test mode, to
-// testMobile) by SMS in one step. An optional voucher (existing coupon)
-// discounts the balance first, and/or the admin can directly override the
-// final amount — see createPaymentLink's own comment for how the two
-// interact and why the failure checks (gateway disabled, voucher too large,
-// etc.) happen before the voucher is applied. The message's fixed wording is
-// DLT-registered and never changes; only its date-range and link variables do.
-export async function sendPaymentLinkAction(
+export type GeneratedPaymentLink = { txnId: string; payUrl: string; amount: string; message: string };
+
+// Splits "create the real link" from "send it" so an admin can see the
+// exact SMS text — with the real, working /pay URL and the real final
+// amount (after any voucher/override) — before actually spending an SMS
+// credit or texting a customer. This creates a genuine payment_intents row
+// (requires PAYU_GATEWAY_ENABLED) since there's no such thing as a "real
+// preview link" that isn't real; the diagnostics page's Test SMS is the
+// one that gets away with a fake placeholder link instead.
+export async function generatePaymentLinkAction(
   readerId: number,
   options: SendPaymentLinkOptions = {}
-): Promise<{ error: string } | { message: string }> {
+): Promise<{ error: string } | GeneratedPaymentLink> {
   try {
-    const { txnId, reader } = await createPaymentLink(readerId, {
+    const { txnId, reader, amount } = await createPaymentLink(readerId, {
       voucherCouponId: options.voucherCouponId,
       amountOverride: options.amountOverride,
     });
     const origin = (await headers()).get("origin") ?? `https://${(await headers()).get("host")}`;
     const payUrl = `${origin}/pay?id=${txnId}`;
-    const smsResult = await sendPaymentLinkSms(reader, payUrl, {
+    const message = await previewPaymentLinkMessage(reader, payUrl, {
       startDate: options.startDate ? isoToDMY(options.startDate) : undefined,
       endDate: options.endDate ? isoToDMY(options.endDate) : undefined,
-      testMobile: options.testMobile,
+      amount,
     });
     revalidatePath(`/readers/${readerId}`);
-    if (!smsResult.success) {
-      // The link itself was created successfully (payment_intent + any
-      // voucher already committed) — only the SMS failed, so say so
-      // precisely rather than implying the whole action failed.
-      return { error: `Link created, but SMS failed to send: ${smsResult.error}. Share it manually: ${payUrl}` };
-    }
-    return {
-      message: options.testMobile
-        ? `Test payment link sent by SMS to ${options.testMobile}.`
-        : "Payment link sent by SMS.",
-    };
+    return { txnId, payUrl, amount, message };
   } catch (e) {
-    return { error: e instanceof Error ? e.message : "Failed to send payment link." };
+    return { error: e instanceof Error ? e.message : "Failed to generate payment link." };
   }
 }
 
-// Test mode: sends a REAL SMS (real provider cost) but to an admin-chosen
-// number instead of the reader's own, and — unlike sendPaymentLinkAction —
-// never touches createPaymentLink/PayU or the ledger, so it works whether or
-// not PAYU_GATEWAY_ENABLED is on. The link in the message is a placeholder,
-// not a real payable one.
-export async function sendTestPaymentLinkSmsAction(
+// Sends the SMS for a link generatePaymentLinkAction already created —
+// no new payment_intent, just the message for the given txnId/amount, so
+// what gets sent is guaranteed to match what was just reviewed.
+export async function sendGeneratedPaymentLinkSmsAction(
   readerId: number,
-  testMobile: string,
+  link: GeneratedPaymentLink,
   startDate?: string,
-  endDate?: string
+  endDate?: string,
+  testMobile?: string
 ): Promise<{ error: string } | { message: string }> {
   await requireAdmin();
   try {
     const reader = await getReader(readerId);
     if (!reader) throw new Error("Reader not found.");
-    const origin = (await headers()).get("origin") ?? `https://${(await headers()).get("host")}`;
-    const smsResult = await sendPaymentLinkSms(reader, `${origin}/pay?id=TEST`, {
+    const smsResult = await sendPaymentLinkSms(reader, link.payUrl, {
       startDate: startDate ? isoToDMY(startDate) : undefined,
       endDate: endDate ? isoToDMY(endDate) : undefined,
       testMobile,
+      amount: link.amount,
     });
-    if (!smsResult.success) {
-      return { error: `SMS failed to send: ${smsResult.error}` };
-    }
-    return { message: `Test SMS sent to ${testMobile}.` };
+    if (!smsResult.success) return { error: `SMS failed to send: ${smsResult.error}` };
+    return {
+      message: testMobile ? `Test payment link sent by SMS to ${testMobile}.` : "Payment link sent by SMS.",
+    };
   } catch (e) {
-    return { error: e instanceof Error ? e.message : "Failed to send test SMS." };
+    return { error: e instanceof Error ? e.message : "Failed to send payment link." };
   }
 }
 
@@ -153,8 +143,9 @@ export type BulkSendResult = {
   failures: { readerId: number; readerName: string; reason: string }[];
 };
 
-// Bulk variant of sendPaymentLinkAction, for the reader directory's
-// checkbox-select toolbar. Continues past individual failures (e.g. a
+// Bulk create-and-send, for the reader directory's checkbox-select
+// toolbar — always atomic (no per-reader review step, unlike the single-
+// reader generate/send flow above). Continues past individual failures (e.g. a
 // reader with no balance due, or the SMS gateway rejecting one number) so
 // one bad row doesn't block the rest — but every failure is still reported
 // back by name and reason rather than silently counted.
@@ -165,8 +156,8 @@ export async function sendBulkPaymentLinksAction(readerIds: number[]): Promise<B
 
   for (const readerId of readerIds) {
     try {
-      const { txnId, reader } = await createPaymentLink(readerId);
-      const smsResult = await sendPaymentLinkSms(reader, `${origin}/pay?id=${txnId}`);
+      const { txnId, reader, amount } = await createPaymentLink(readerId);
+      const smsResult = await sendPaymentLinkSms(reader, `${origin}/pay?id=${txnId}`, { amount });
       if (smsResult.success) {
         sent++;
       } else {

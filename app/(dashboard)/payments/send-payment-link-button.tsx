@@ -2,7 +2,12 @@
 
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { sendPaymentLinkAction, sendTestPaymentLinkSmsAction, previewPaymentLinkMessageAction } from "./actions";
+import {
+  generatePaymentLinkAction,
+  sendGeneratedPaymentLinkSmsAction,
+  previewPaymentLinkMessageAction,
+  type GeneratedPaymentLink,
+} from "./actions";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem, SelectGroup } from "@/components/ui/select";
@@ -28,7 +33,8 @@ export function SendPaymentLinkButton({
   coupons: Coupon[];
 }) {
   const router = useRouter();
-  const [pending, startTransition] = useTransition();
+  const [generatePending, startGenerateTransition] = useTransition();
+  const [sendPending, startSendTransition] = useTransition();
   const [previewPending, startPreviewTransition] = useTransition();
   const [result, setResult] = useState<{ error: string } | { message: string } | null>(null);
   const [preview, setPreview] = useState<string | null>(null);
@@ -39,6 +45,15 @@ export function SendPaymentLinkButton({
   const [endDate, setEndDate] = useState(defaultEnd);
   const [testMode, setTestMode] = useState(false);
   const [testMobile, setTestMobile] = useState("");
+  const [generatedLink, setGeneratedLink] = useState<GeneratedPaymentLink | null>(null);
+  const [generateError, setGenerateError] = useState<string | null>(null);
+
+  // Any option change invalidates a previously generated link — never let
+  // "Send" fire an SMS whose amount/dates no longer match what's on screen.
+  function invalidateGeneratedLink() {
+    setGeneratedLink(null);
+    setResult(null);
+  }
 
   return (
     <div className="flex flex-col items-end gap-1">
@@ -48,7 +63,10 @@ export function SendPaymentLinkButton({
           step="0.01"
           min="0.01"
           value={amount}
-          onChange={(e) => setAmount(e.target.value)}
+          onChange={(e) => {
+            setAmount(e.target.value);
+            invalidateGeneratedLink();
+          }}
           className="w-24"
           aria-label="Payment link amount"
         />
@@ -61,6 +79,7 @@ export function SendPaymentLinkButton({
               // Suggest the discounted total; admin can still edit it further.
               const discount = id === "none" ? 0 : Number(coupons.find((c) => String(c.id) === id)?.discountAmount ?? 0);
               setAmount(Math.max(0, Number(outstandingBalance) - discount).toFixed(2));
+              invalidateGeneratedLink();
             }}
             items={{
               none: "No voucher",
@@ -94,7 +113,10 @@ export function SendPaymentLinkButton({
                   id={`startDate-${readerId}`}
                   type="date"
                   value={startDate}
-                  onChange={(e) => setStartDate(e.target.value)}
+                  onChange={(e) => {
+                    setStartDate(e.target.value);
+                    invalidateGeneratedLink();
+                  }}
                   className="h-7 text-xs"
                 />
               </div>
@@ -106,14 +128,23 @@ export function SendPaymentLinkButton({
                   id={`endDate-${readerId}`}
                   type="date"
                   value={endDate}
-                  onChange={(e) => setEndDate(e.target.value)}
+                  onChange={(e) => {
+                    setEndDate(e.target.value);
+                    invalidateGeneratedLink();
+                  }}
                   className="h-7 text-xs"
                 />
               </div>
             </div>
 
             <label className="flex items-center gap-2">
-              <Checkbox checked={testMode} onCheckedChange={(checked) => setTestMode(checked === true)} />
+              <Checkbox
+                checked={testMode}
+                onCheckedChange={(checked) => {
+                  setTestMode(checked === true);
+                  invalidateGeneratedLink();
+                }}
+              />
               Test mode — send to a different number instead of the reader&apos;s own
             </label>
             {testMode && (
@@ -139,42 +170,78 @@ export function SendPaymentLinkButton({
                 });
               }}
             >
-              {previewPending ? "Loading..." : "Preview message"}
+              {previewPending ? "Loading..." : "Preview wording (fake link)"}
             </Button>
             {preview && <p className="rounded bg-muted p-2 text-muted-foreground">{preview}</p>}
             <p className="text-muted-foreground">
               The message wording itself is fixed (carrier-registered) — only the dates, amount, and link are
-              adjustable.
+              adjustable. Use &quot;Generate Link&quot; below to see the real, working link before sending.
             </p>
           </PopoverContent>
         </Popover>
-        <Button
-          type="button"
-          variant="outline"
-          size="sm"
-          disabled={pending || (testMode && !testMobile)}
-          onClick={() => {
-            setResult(null);
-            startTransition(async () => {
-              const res = testMode
-                ? await sendTestPaymentLinkSmsAction(readerId, testMobile, startDate, endDate)
-                : await sendPaymentLinkAction(readerId, {
-                    voucherCouponId: voucherId === "none" ? undefined : Number(voucherId),
-                    amountOverride: Number(amount),
-                    startDate,
-                    endDate,
-                  });
-              setResult(res);
-              if ("message" in res && !testMode) {
-                setVoucherId("none");
-                router.refresh();
-              }
-            });
-          }}
-        >
-          {pending ? "Sending..." : testMode ? "Send Test SMS" : "Send Payment Link"}
-        </Button>
+
+        {!generatedLink ? (
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            disabled={generatePending}
+            onClick={() => {
+              setGenerateError(null);
+              startGenerateTransition(async () => {
+                const res = await generatePaymentLinkAction(readerId, {
+                  voucherCouponId: voucherId === "none" ? undefined : Number(voucherId),
+                  amountOverride: Number(amount),
+                  startDate,
+                  endDate,
+                });
+                if ("error" in res) setGenerateError(res.error);
+                else setGeneratedLink(res);
+              });
+            }}
+          >
+            {generatePending ? "Generating..." : "Generate Link"}
+          </Button>
+        ) : (
+          <Button
+            type="button"
+            size="sm"
+            disabled={sendPending || (testMode && !testMobile)}
+            onClick={() => {
+              setResult(null);
+              startSendTransition(async () => {
+                const res = await sendGeneratedPaymentLinkSmsAction(
+                  readerId,
+                  generatedLink,
+                  startDate,
+                  endDate,
+                  testMode ? testMobile : undefined
+                );
+                setResult(res);
+                if ("message" in res) {
+                  setGeneratedLink(null);
+                  setVoucherId("none");
+                  router.refresh();
+                }
+              });
+            }}
+          >
+            {sendPending ? "Sending..." : testMode ? "Send Test SMS" : "Send SMS"}
+          </Button>
+        )}
       </div>
+
+      {generateError && <span className="max-w-56 text-right text-xs text-destructive">{generateError}</span>}
+
+      {generatedLink && (
+        <div className="flex max-w-80 flex-col gap-1 rounded-md border p-2 text-right text-xs">
+          <span className="text-muted-foreground">Real link generated — review before sending:</span>
+          <a href={generatedLink.payUrl} target="_blank" rel="noreferrer" className="break-all underline">
+            {generatedLink.payUrl}
+          </a>
+          <p className="rounded bg-muted p-2 text-left text-muted-foreground">{generatedLink.message}</p>
+        </div>
+      )}
 
       {result && "error" in result && <span className="max-w-56 text-right text-xs text-destructive">{result.error}</span>}
       {result && "message" in result && <span className="text-xs text-muted-foreground">{result.message}</span>}

@@ -149,14 +149,18 @@ export async function createPaymentLink(
   if (balance <= 0) throw new Error("This reader has no outstanding balance to collect.");
 
   const txnId = `TX_${Date.now()}_${randomBytes(4).toString("hex")}`;
+  const amount = balance.toFixed(2);
   await db.insert(paymentIntents).values({
     readerId,
     txnId,
-    amount: balance.toFixed(2),
+    amount,
     createdBy: user.id,
   });
 
-  return { txnId, reader };
+  // `amount` is the real final link amount (after voucher/override) —
+  // `reader.outstandingBalance` is a stale snapshot from before any of that
+  // and must never be used for what the SMS says is owed.
+  return { txnId, reader, amount };
 }
 
 // The following three functions are the one deliberate exception to this
