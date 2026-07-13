@@ -150,7 +150,7 @@ export async function listAssignableCentersWithPocs() {
   const centerScope = user.role === "admin" ? undefined : inArray(centers.id, user.centerIds);
 
   const centerRows = await db
-    .select({ id: centers.id, name: centers.name, cityName: cities.name })
+    .select({ id: centers.id, name: centers.name, cityName: cities.name, unitId: cities.unitId })
     .from(centers)
     .innerJoin(cities, eq(centers.cityId, cities.id))
     .where(centerScope)
@@ -367,4 +367,65 @@ export async function bulkDeleteReaders(readerIds: number[]): Promise<{ deleted:
     }
   }
   return { deleted, blocked };
+}
+
+// Admin-only. Editable fields for an existing reader — deliberately excludes
+// centerId (goes through transferReader/bulkTransferReaders instead, so
+// every Center change stays logged to reader_transfers) and subscription
+// start date (billing-relevant, not a plain profile detail).
+export async function updateReader(
+  readerId: number,
+  input: { name: string; mobile: string; email?: string; address: string; landmark?: string; status: "active" | "inactive" }
+) {
+  await requireAdmin();
+  const [reader] = await db.select({ id: readers.id }).from(readers).where(eq(readers.id, readerId));
+  if (!reader) throw new Error("Reader not found.");
+  await db
+    .update(readers)
+    .set({
+      name: input.name,
+      mobile: input.mobile,
+      email: input.email ?? null,
+      address: input.address,
+      landmark: input.landmark ?? null,
+      status: input.status,
+    })
+    .where(eq(readers.id, readerId));
+}
+
+// Bulk equivalent of transferReader() — same reader_transfers audit log per
+// reader, just looped inside one transaction. Readers already at toCenterId
+// are silently skipped rather than erroring the whole batch.
+export async function bulkTransferReaders(readerIds: number[], toCenterId: number, remarks?: string): Promise<{ transferred: number }> {
+  const user = await requireAdmin();
+  if (readerIds.length === 0) return { transferred: 0 };
+
+  const rows = await db.select({ id: readers.id, centerId: readers.centerId }).from(readers).where(inArray(readers.id, readerIds));
+  const toMove = rows.filter((r) => r.centerId !== toCenterId);
+
+  await db.transaction(async (tx) => {
+    for (const r of toMove) {
+      await tx.insert(readerTransfers).values({ readerId: r.id, fromCenterId: r.centerId, toCenterId, transferredBy: user.id, remarks });
+      await tx.update(readers).set({ centerId: toCenterId }).where(eq(readers.id, r.id));
+    }
+  });
+
+  return { transferred: toMove.length };
+}
+
+export async function bulkUpdateReaderStatus(readerIds: number[], status: "active" | "inactive"): Promise<{ updated: number }> {
+  await requireAdmin();
+  if (readerIds.length === 0) return { updated: 0 };
+  await db.update(readers).set({ status }).where(inArray(readers.id, readerIds));
+  return { updated: readerIds.length };
+}
+
+// The one "other field" that's actually sensible to set to the same value in
+// bulk (a shared delivery-route/area tag) — unlike name/mobile/email/address,
+// which are inherently per-reader and would be a foot-gun to bulk-overwrite.
+export async function bulkUpdateReaderLandmark(readerIds: number[], landmark: string): Promise<{ updated: number }> {
+  await requireAdmin();
+  if (readerIds.length === 0) return { updated: 0 };
+  await db.update(readers).set({ landmark: landmark || null }).where(inArray(readers.id, readerIds));
+  return { updated: readerIds.length };
 }

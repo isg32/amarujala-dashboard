@@ -2,13 +2,23 @@ import { z } from "zod";
 
 // Shared field rules — single source of truth for what makes a valid reader,
 // reused by the single-add form and the bulk Excel upload below.
-const name = z.string().trim().min(1, "Name is required");
-const mobile = z.string().trim().regex(/^\d{10}$/, "Mobile number must be 10 digits");
-const email = z.email().optional().or(z.literal("")).transform((v) => v || undefined);
-const address = z.string().trim().min(1, "Address is required");
-const landmark = z.string().trim().optional().or(z.literal("")).transform((v) => v || undefined);
+export const name = z.string().trim().min(1, "Name is required");
+export const mobile = z.string().trim().regex(/^\d{10}$/, "Mobile number must be 10 digits");
+export const email = z.email().optional().or(z.literal("")).transform((v) => v || undefined);
+export const address = z.string().trim().min(1, "Address is required");
+export const landmark = z.string().trim().optional().or(z.literal("")).transform((v) => v || undefined);
 const subscriptionStartDate = z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Invalid date (expected YYYY-MM-DD)");
 const remarks = z.string().trim().optional().or(z.literal("")).transform((v) => v || undefined);
+
+export const readerEditSchema = z.object({
+  name,
+  mobile,
+  email,
+  address,
+  landmark,
+  status: z.enum(["active", "inactive"]),
+});
+export type ReaderEditInput = z.infer<typeof readerEditSchema>;
 
 export const readerInputSchema = z.object({
   name,

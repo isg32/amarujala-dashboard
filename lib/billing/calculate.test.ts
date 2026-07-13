@@ -245,3 +245,38 @@ test("calculateCycleCharge prorates a cross-month cycle against each day's own m
   });
   assert.equal(charge, 31 * 20); // 17 July days + 14 Aug days = 31 days * 20/day
 });
+
+test("unmarkedDefault: 'delivered' (default) charges unmarked days, matching the original FRD behavior", () => {
+  const charge = calculateMonthCharge({
+    billingPeriod: "2026-07",
+    subscriptionStartDate: "2026-01-01",
+    attendance: {},
+    pricingHistory: JULY_PRICE,
+    today: "2026-08-01",
+  });
+  assert.equal(charge, 310);
+});
+
+test("unmarkedDefault: 'not_delivered' charges nothing for unmarked days", () => {
+  const charge = calculateMonthCharge({
+    billingPeriod: "2026-07",
+    subscriptionStartDate: "2026-01-01",
+    attendance: {},
+    pricingHistory: JULY_PRICE,
+    today: "2026-08-01",
+    unmarkedDefault: "not_delivered",
+  });
+  assert.equal(charge, 0);
+});
+
+test("unmarkedDefault: 'not_delivered' still charges days explicitly marked delivered", () => {
+  const charge = calculateMonthCharge({
+    billingPeriod: "2026-07",
+    subscriptionStartDate: "2026-01-01",
+    attendance: { "2026-07-01": "delivered", "2026-07-02": "delivered" },
+    pricingHistory: JULY_PRICE,
+    today: "2026-08-01",
+    unmarkedDefault: "not_delivered",
+  });
+  assert.equal(charge, 20); // 2 days * 10/day, rest unmarked -> absent
+});

@@ -1,5 +1,5 @@
 import { requireAdmin } from "@/lib/auth/session";
-import { listPocs, listCenters, listAdmins } from "@/lib/data/master-data";
+import { listPocs, listCenters, listCities, listAdmins } from "@/lib/data/master-data";
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
 import { Table, TableHeader, TableRow, TableHead, TableBody } from "@/components/ui/table";
 import { PocForm } from "./poc-form";
@@ -9,7 +9,7 @@ import { AdminRow } from "./admin-row";
 
 export default async function PocsPage() {
   const currentUser = await requireAdmin();
-  const [pocs, centers, admins] = await Promise.all([listPocs(), listCenters(), listAdmins()]);
+  const [pocs, centers, cities, admins] = await Promise.all([listPocs(), listCenters(), listCities(), listAdmins()]);
 
   return (
     <div className="flex flex-col gap-6 overflow-x-auto">
@@ -21,7 +21,7 @@ export default async function PocsPage() {
           {centers.length === 0 ? (
             <p className="text-sm text-muted-foreground">Create a Center first.</p>
           ) : (
-            <PocForm centers={centers} />
+            <PocForm centers={centers} cities={cities} />
           )}
         </CardContent>
       </Card>
@@ -42,7 +42,7 @@ export default async function PocsPage() {
             </TableHeader>
             <TableBody>
               {pocs.map((poc) => (
-                <PocRow key={poc.id} poc={poc} allCenters={centers} />
+                <PocRow key={poc.id} poc={poc} allCenters={centers} cities={cities} />
               ))}
             </TableBody>
           </Table>

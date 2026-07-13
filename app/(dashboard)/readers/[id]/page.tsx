@@ -7,7 +7,6 @@ import { getCurrentMonthProvisional, listLedgerForReader } from "@/lib/data/bill
 import { listPaymentsForReader } from "@/lib/data/payments";
 import { listCoupons, listCouponsForReader } from "@/lib/data/coupons";
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { RecordPaymentForm } from "../../payments/record-payment-form";
 import { ReversePaymentButton } from "../../payments/reverse-payment-button";
@@ -17,6 +16,7 @@ import { ApplyCouponForm } from "../../coupons/apply-coupon-form";
 import { SendReminderButton } from "./send-reminder-button";
 import { BillingCycleForm } from "./billing-cycle-form";
 import { CloseReaderCycleButton } from "./close-reader-cycle-button";
+import { ReaderProfileCard } from "./reader-profile-card";
 
 const LEDGER_LABELS: Record<string, string> = {
   monthly_charge: "Monthly Charge",
@@ -59,16 +59,12 @@ export default async function ReaderProfilePage({
 
   return (
     <div className="flex flex-col gap-6 overflow-x-auto">
-      <Card>
-        <CardHeader className="flex items-start justify-between">
-          <div>
-            <CardTitle className="flex items-center gap-2">
-              {reader.name}
-              <Badge variant={reader.status === "active" ? "secondary" : "outline"}>{reader.status}</Badge>
-            </CardTitle>
-            <p className="text-sm text-muted-foreground">{reader.readerCode}</p>
-          </div>
-          <div className="flex gap-2">
+      <ReaderProfileCard
+        reader={reader}
+        transfers={transfers}
+        isAdmin={isAdmin}
+        actions={
+          <>
             {!currentUser?.suspended && <SendReminderButton readerId={reader.id} />}
             {isAdmin && (
               <SendPaymentLinkButton
@@ -84,55 +80,12 @@ export default async function ReaderProfilePage({
                 render={<Link href={`/readers/${reader.id}/transfer`} prefetch={false} />}
                 nativeButton={false}
               >
-                Transfer
+                Transfer Center
               </Button>
             )}
-          </div>
-        </CardHeader>
-        <CardContent className="grid grid-cols-2 gap-x-6 gap-y-3 text-sm">
-          <div>
-            <div className="text-muted-foreground">Mobile</div>
-            <div>{reader.mobile}</div>
-          </div>
-          <div>
-            <div className="text-muted-foreground">Email</div>
-            <div>{reader.email ?? "—"}</div>
-          </div>
-          <div>
-            <div className="text-muted-foreground">City</div>
-            <div>{reader.cityName}</div>
-          </div>
-          <div>
-            <div className="text-muted-foreground">Center</div>
-            <div>{reader.centerName}</div>
-          </div>
-          <div>
-            <div className="text-muted-foreground">Assigned POC</div>
-            <div>{reader.pocName ?? "—"}</div>
-          </div>
-          <div>
-            <div className="text-muted-foreground">Subscription Start</div>
-            <div>{reader.subscriptionStartDate}</div>
-          </div>
-          <div>
-            <div className="text-muted-foreground">Outstanding Balance</div>
-            <div>₹{reader.outstandingBalance}</div>
-          </div>
-        </CardContent>
-        {transfers.length > 0 && (
-          <CardContent className="border-t pt-4 text-sm">
-            <div className="mb-2 text-muted-foreground">Transfer History</div>
-            <div className="flex flex-col gap-1.5">
-              {transfers.map((t) => (
-                <div key={t.id} className="text-xs text-muted-foreground">
-                  {t.transferredAt.toISOString().slice(0, 10)}: {t.fromCenterName} → {t.toCenterName}
-                  {t.remarks ? ` — ${t.remarks}` : ""}
-                </div>
-              ))}
-            </div>
-          </CardContent>
-        )}
-      </Card>
+          </>
+        }
+      />
 
       <Card>
         <CardHeader>

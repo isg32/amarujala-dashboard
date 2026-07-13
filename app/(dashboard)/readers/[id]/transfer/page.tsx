@@ -67,7 +67,7 @@ export default async function TransferReaderPage({
               <Input id="remarks" name="remarks" />
             </Field>
           </FieldGroup>
-          <Button type="submit" className="self-start">Transfer</Button>
+          <Button type="submit" className="self-start">Transfer Center</Button>
         </form>
       </CardContent>
     </Card>

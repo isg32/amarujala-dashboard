@@ -5,14 +5,15 @@ import { createPocAction } from "../actions";
 import { Field, FieldLabel, FieldGroup } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
-import { Checkbox } from "@/components/ui/checkbox";
 import { Alert, AlertTitle, AlertDescription } from "@/components/ui/alert";
+import { CenterPicker } from "./center-picker";
 
-type Center = { id: number; name: string; cityName: string };
+type Center = { id: number; name: string; cityId: number; cityName: string };
+type City = { id: number; name: string };
 
 const initialState: { tempPassword?: string } | { error: string } | null = null;
 
-export function PocForm({ centers }: { centers: Center[] }) {
+export function PocForm({ centers, cities }: { centers: Center[]; cities: City[] }) {
   const [state, formAction, pending] = useActionState(
     async (_prev: typeof initialState, formData: FormData) => createPocAction(formData),
     initialState
@@ -37,14 +38,7 @@ export function PocForm({ centers }: { centers: Center[] }) {
           </Field>
           <Field>
             <FieldLabel>Assigned Centers</FieldLabel>
-            <div className="flex flex-col gap-2">
-              {centers.map((center) => (
-                <label key={center.id} className="flex items-center gap-2 text-sm">
-                  <Checkbox name="centerIds" value={String(center.id)} />
-                  {center.name} ({center.cityName})
-                </label>
-              ))}
-            </div>
+            <CenterPicker centers={centers} cities={cities} />
           </Field>
         </FieldGroup>
         <Button type="submit" disabled={pending} className="self-start">

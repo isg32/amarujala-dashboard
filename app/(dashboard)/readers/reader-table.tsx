@@ -7,7 +7,9 @@ import { Table, TableHeader, TableRow, TableHead, TableBody, TableCell } from "@
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
-import { bulkDeleteReadersAction } from "./actions";
+import { Input } from "@/components/ui/input";
+import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem, SelectGroup } from "@/components/ui/select";
+import { bulkDeleteReadersAction, bulkTransferReadersAction, bulkUpdateReaderStatusAction, bulkUpdateReaderLandmarkAction } from "./actions";
 import { sendBulkPaymentLinksAction, type BulkSendResult } from "../payments/actions";
 
 type Reader = {
@@ -23,12 +25,16 @@ type Reader = {
   status: "active" | "inactive";
 };
 
-export function ReaderTable({ readers, isAdmin }: { readers: Reader[]; isAdmin: boolean }) {
+type Center = { id: number; name: string; cityName: string };
+
+export function ReaderTable({ readers, isAdmin, centers = [] }: { readers: Reader[]; isAdmin: boolean; centers?: Center[] }) {
   const router = useRouter();
   const [selected, setSelected] = useState<Set<number>>(new Set());
   const [pending, startTransition] = useTransition();
   const [notice, setNotice] = useState<string | null>(null);
   const [linkResult, setLinkResult] = useState<BulkSendResult | null>(null);
+  const [bulkCenterId, setBulkCenterId] = useState("");
+  const [bulkLandmark, setBulkLandmark] = useState("");
 
   const allSelected = readers.length > 0 && selected.size === readers.length;
 
@@ -66,6 +72,40 @@ export function ReaderTable({ readers, isAdmin }: { readers: Reader[]; isAdmin: 
     });
   }
 
+  function runBulkTransfer() {
+    if (!bulkCenterId) return;
+    setNotice(null);
+    startTransition(async () => {
+      const result = await bulkTransferReadersAction([...selected], Number(bulkCenterId));
+      setNotice(result.message);
+      setSelected(new Set());
+      setBulkCenterId("");
+      router.refresh();
+    });
+  }
+
+  function runBulkStatus(status: "active" | "inactive") {
+    setNotice(null);
+    startTransition(async () => {
+      const result = await bulkUpdateReaderStatusAction([...selected], status);
+      setNotice(result.message);
+      setSelected(new Set());
+      router.refresh();
+    });
+  }
+
+  function runBulkLandmark() {
+    if (!bulkLandmark.trim()) return;
+    setNotice(null);
+    startTransition(async () => {
+      const result = await bulkUpdateReaderLandmarkAction([...selected], bulkLandmark.trim());
+      setNotice(result.message);
+      setSelected(new Set());
+      setBulkLandmark("");
+      router.refresh();
+    });
+  }
+
   return (
     <div className="flex flex-col gap-3">
       {isAdmin && (
@@ -90,6 +130,46 @@ export function ReaderTable({ readers, isAdmin }: { readers: Reader[]; isAdmin: 
             Delete Readers{selected.size > 0 ? ` (${selected.size})` : ""}
           </Button>
           {notice && <span className="text-xs text-muted-foreground">{notice}</span>}
+        </div>
+      )}
+
+      {isAdmin && selected.size > 0 && (
+        <div className="flex flex-wrap items-center gap-2 rounded-md border p-2">
+          <span className="text-xs text-muted-foreground">Bulk edit {selected.size} selected:</span>
+          <Select value={bulkCenterId} onValueChange={(v) => setBulkCenterId(v ?? "")} items={Object.fromEntries(centers.map((c) => [String(c.id), c.name]))}>
+            <SelectTrigger className="h-8 w-44 text-xs">
+              <SelectValue placeholder="Transfer to Center..." />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectGroup>
+                {centers.map((c) => (
+                  <SelectItem key={c.id} value={String(c.id)}>
+                    {c.name} ({c.cityName})
+                  </SelectItem>
+                ))}
+              </SelectGroup>
+            </SelectContent>
+          </Select>
+          <Button variant="outline" size="xs" disabled={!bulkCenterId || pending} onClick={runBulkTransfer}>
+            Go
+          </Button>
+
+          <Button variant="outline" size="xs" disabled={pending} onClick={() => runBulkStatus("active")}>
+            Set Active
+          </Button>
+          <Button variant="outline" size="xs" disabled={pending} onClick={() => runBulkStatus("inactive")}>
+            Set Inactive
+          </Button>
+
+          <Input
+            value={bulkLandmark}
+            onChange={(e) => setBulkLandmark(e.target.value)}
+            placeholder="Set landmark..."
+            className="h-8 w-40 text-xs"
+          />
+          <Button variant="outline" size="xs" disabled={!bulkLandmark.trim() || pending} onClick={runBulkLandmark}>
+            Go
+          </Button>
         </div>
       )}
 

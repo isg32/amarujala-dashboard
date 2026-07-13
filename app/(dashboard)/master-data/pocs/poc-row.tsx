@@ -9,8 +9,10 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Checkbox } from "@/components/ui/checkbox";
 import { DeleteButton } from "../delete-button";
+import { CenterPicker } from "./center-picker";
 
-type Center = { id: number; name: string; cityName: string };
+type Center = { id: number; name: string; cityId: number; cityName: string };
+type City = { id: number; name: string };
 type Poc = {
   id: string;
   name: string;
@@ -22,12 +24,11 @@ type Poc = {
   suspended: boolean;
 };
 
-export function PocRow({ poc, allCenters }: { poc: Poc; allCenters: Center[] }) {
+export function PocRow({ poc, allCenters, cities }: { poc: Poc; allCenters: Center[]; cities: City[] }) {
   const router = useRouter();
   const [editing, setEditing] = useState(false);
   const [pending, setPending] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const assignedIds = new Set(poc.centers.map((c) => c.id));
 
   if (!editing) {
     return (
@@ -102,14 +103,7 @@ export function PocRow({ poc, allCenters }: { poc: Poc; allCenters: Center[] }) 
           </div>
           <div className="flex flex-col gap-1">
             <span className="text-xs text-muted-foreground">Assigned Centers</span>
-            <div className="flex flex-col gap-1">
-              {allCenters.map((center) => (
-                <label key={center.id} className="flex items-center gap-2 text-sm">
-                  <Checkbox name="centerIds" value={String(center.id)} defaultChecked={assignedIds.has(center.id)} />
-                  {center.name} ({center.cityName})
-                </label>
-              ))}
-            </div>
+            <CenterPicker centers={allCenters} cities={cities} defaultSelectedIds={poc.centers.map((c) => c.id)} />
           </div>
           <div className="flex flex-col gap-1">
             <span className="text-xs text-muted-foreground">Permissions</span>

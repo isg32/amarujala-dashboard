@@ -15,6 +15,7 @@ import {
   SelectGroup,
 } from "@/components/ui/select";
 import { ReaderTable } from "./reader-table";
+import { UnitCenterFilter } from "./unit-center-filter";
 
 const PAGE_SIZE = 50;
 
@@ -119,23 +120,30 @@ export default async function ReadersPage({
               <label htmlFor="search" className="text-sm font-medium">Search</label>
               <Input id="search" name="search" defaultValue={params.search} placeholder="Name, mobile, email, reader ID" className="w-64" />
             </div>
-            {isAdmin && (
+            {isAdmin ? (
+              <UnitCenterFilter
+                units={units}
+                centers={centers}
+                defaultUnitId={params.unitId || "any"}
+                defaultCenterId={params.centerId || "any"}
+              />
+            ) : (
               <div className="flex flex-col gap-1.5">
-                <label htmlFor="unitId" className="text-sm font-medium">Unit</label>
+                <label htmlFor="centerId" className="text-sm font-medium">Center</label>
                 <Select
-                  name="unitId"
-                  defaultValue={params.unitId || "any"}
-                  items={{ any: "Any", ...Object.fromEntries(units.map((u) => [String(u.id), u.name])) }}
+                  name="centerId"
+                  defaultValue={params.centerId || "any"}
+                  items={{ any: "Any", ...Object.fromEntries(centers.map((c) => [String(c.id), c.name])) }}
                 >
-                  <SelectTrigger id="unitId" className="w-40">
+                  <SelectTrigger id="centerId" className="w-48">
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
                     <SelectGroup>
                       <SelectItem value="any">Any</SelectItem>
-                      {units.map((u) => (
-                        <SelectItem key={u.id} value={String(u.id)}>
-                          {u.name}
+                      {centers.map((c) => (
+                        <SelectItem key={c.id} value={String(c.id)}>
+                          {c.name}
                         </SelectItem>
                       ))}
                     </SelectGroup>
@@ -143,28 +151,6 @@ export default async function ReadersPage({
                 </Select>
               </div>
             )}
-            <div className="flex flex-col gap-1.5">
-              <label htmlFor="centerId" className="text-sm font-medium">Center</label>
-              <Select
-                name="centerId"
-                defaultValue={params.centerId || "any"}
-                items={{ any: "Any", ...Object.fromEntries(centers.map((c) => [String(c.id), c.name])) }}
-              >
-                <SelectTrigger id="centerId" className="w-48">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectGroup>
-                    <SelectItem value="any">Any</SelectItem>
-                    {centers.map((c) => (
-                      <SelectItem key={c.id} value={String(c.id)}>
-                        {c.name}
-                      </SelectItem>
-                    ))}
-                  </SelectGroup>
-                </SelectContent>
-              </Select>
-            </div>
             <div className="flex flex-col gap-1.5">
               <label htmlFor="landmark" className="text-sm font-medium">Landmark</label>
               <Input id="landmark" name="landmark" defaultValue={params.landmark} placeholder="Any" className="w-40" />
@@ -204,7 +190,7 @@ export default async function ReadersPage({
 
       <Card>
         <CardContent>
-          <ReaderTable readers={readerRows} isAdmin={isAdmin} />
+          <ReaderTable readers={readerRows} isAdmin={isAdmin} centers={centers} />
         </CardContent>
       </Card>
 

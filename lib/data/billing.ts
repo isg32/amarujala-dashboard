@@ -25,6 +25,19 @@ import {
 } from "@/lib/billing/calculate";
 import { postLedgerEntry } from "@/lib/billing/ledger";
 
+// Confirmed 2026-07-14: flip the "unmarked attendance day" default from
+// delivered to not_delivered, but only for billing cycles that START on or
+// after this date — a cycle already in progress when this shipped keeps the
+// old delivered-default for its whole length (so July's live totals don't
+// suddenly crater for POCs who were only marking absences). Applies per
+// reader-cycle, so custom billingAnchorDay readers cut over individually
+// based on their own cycle's start date, not a shared calendar boundary.
+const UNMARKED_DEFAULT_CUTOVER_DATE = "2026-07-14";
+
+function unmarkedDefaultFor(cycleStart: string): AttendanceStatus {
+  return cycleStart >= UNMARKED_DEFAULT_CUTOVER_DATE ? "not_delivered" : "delivered";
+}
+
 async function getReaderBillingContext(readerId: number) {
   const [row] = await db
     .select({
@@ -132,6 +145,7 @@ export async function getCurrentMonthProvisional(readerId: number) {
     attendance: attendanceMap,
     pricingHistory,
     today,
+    unmarkedDefault: unmarkedDefaultFor(cycleStart),
     ...overrides,
   });
 
@@ -234,6 +248,7 @@ export async function closeMonth(billingPeriod: string): Promise<CloseMonthResul
         attendance: attendanceMap,
         pricingHistory: pricingByCityId.get(reader.cityId) ?? [],
         today: monthEnd, // force full-month billing regardless of when Close Month is actually clicked
+        unmarkedDefault: unmarkedDefaultFor(monthStart),
         ...overrides,
       });
       // Always post, even for a $0 charge: this is what makes the period
@@ -314,6 +329,7 @@ export async function closeReaderCycle(readerId: number): Promise<CloseReaderCyc
     attendance: attendanceMap,
     pricingHistory,
     today: cycleEnd, // force the full completed cycle regardless of when this is clicked
+    unmarkedDefault: unmarkedDefaultFor(cycleStart),
     ...overrides,
   });
 

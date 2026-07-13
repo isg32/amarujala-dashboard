@@ -71,7 +71,7 @@ export interface CalculateCycleChargeParams {
   cycleEnd: string;
   /** 'YYYY-MM-DD' */
   subscriptionStartDate: string;
-  /** date -> status; a date absent from this map is "unmarked" and counts as delivered */
+  /** date -> status; a date absent from this map is "unmarked" and defaults to unmarkedDefault */
   attendance: Record<string, AttendanceStatus>;
   pricingHistory: PricePeriod[];
   /**
@@ -86,10 +86,18 @@ export interface CalculateCycleChargeParams {
   globalDefault?: number | null;
   /** date ('YYYY-MM-DD') -> one-day-only price, e.g. festival hikes. */
   specialDayPrices?: Record<string, number>;
+  /**
+   * Status assumed for a day with no attendance row at all. Defaults to
+   * "delivered" (the original FRD decision, minimizes POC data entry). Callers
+   * pass "not_delivered" for cycles starting on/after the absent-by-default
+   * cutover — see lib/data/billing.ts's UNMARKED_DEFAULT_CUTOVER_DATE.
+   */
+  unmarkedDefault?: AttendanceStatus;
 }
 
 export function calculateCycleCharge(params: CalculateCycleChargeParams): number {
   const today = params.today ?? new Date().toISOString().slice(0, 10);
+  const unmarkedDefault = params.unmarkedDefault ?? "delivered";
 
   const periodStart = params.subscriptionStartDate > params.cycleStart ? params.subscriptionStartDate : params.cycleStart;
   const periodEnd = today < params.cycleEnd ? today : params.cycleEnd;
@@ -101,7 +109,7 @@ export function calculateCycleCharge(params: CalculateCycleChargeParams): number
   const end = new Date(periodEnd + "T00:00:00Z");
   while (cursor <= end) {
     const dateStr = cursor.toISOString().slice(0, 10);
-    const status = params.attendance[dateStr];
+    const status = params.attendance[dateStr] ?? unmarkedDefault;
     if (status !== "not_delivered") {
       total += resolveDailyRate({
         date: dateStr,
@@ -129,6 +137,7 @@ export interface CalculateMonthChargeParams {
   unitOverride?: number | null;
   globalDefault?: number | null;
   specialDayPrices?: Record<string, number>;
+  unmarkedDefault?: AttendanceStatus;
 }
 
 // Thin wrapper over calculateCycleCharge for the calendar-month case (the
