@@ -17,7 +17,7 @@ export default async function CouponsPage() {
     <div className="flex flex-col gap-6 overflow-x-auto">
       <div className="flex items-center justify-between">
         <h1 className="text-lg font-semibold">Coupons</h1>
-        <Button variant="outline" size="sm" render={<Link href="/coupons/usage" />} nativeButton={false}>
+        <Button variant="outline" size="sm" render={<Link href="/coupons/usage" prefetch={false} />} nativeButton={false}>
           Coupon Tracking
         </Button>
       </div>

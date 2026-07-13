@@ -175,3 +175,21 @@ export async function sendPaymentLinkSms(
   const variables = buildPaymentLinkVariables(reader, payUrl, options);
   return sendSms(options?.testMobile || reader.mobile, "payment_link", variables);
 }
+
+// Diagnostics page support: preview/send for a made-up test customer,
+// covering both templates, not tied to any real reader. Goes through the
+// exact same getTemplateText/renderTemplate/sendSms path as every real
+// send, so a pass here is a real signal the pipeline works — not a
+// simulation of it.
+export async function previewTestMessage(type: SmsTemplateType, variables: Record<string, string>): Promise<string> {
+  const templateText = await getTemplateText(type);
+  return renderTemplate(templateText, variables);
+}
+
+export async function sendTestSms(
+  type: SmsTemplateType,
+  mobile: string,
+  variables: Record<string, string>
+): Promise<SendSmsResult> {
+  return sendSms(mobile, type, variables);
+}

@@ -14,7 +14,7 @@ export default async function CouponTrackingPage() {
     <div className="flex flex-col gap-6 overflow-x-auto">
       <div className="flex items-center justify-between">
         <h1 className="text-lg font-semibold">Coupon Tracking</h1>
-        <Button variant="outline" size="sm" render={<Link href="/coupons" />} nativeButton={false}>
+        <Button variant="outline" size="sm" render={<Link href="/coupons" prefetch={false} />} nativeButton={false}>
           Back to Coupons
         </Button>
       </div>
@@ -56,7 +56,7 @@ export default async function CouponTrackingPage() {
                   {coupon.usages.map((u) => (
                     <TableRow key={u.id}>
                       <TableCell>
-                        <Link href={`/readers/${u.readerId}`} className="hover:underline">
+                        <Link href={`/readers/${u.readerId}`} prefetch={false} className="hover:underline">
                           {u.readerName}
                         </Link>
                         <div className="text-xs text-muted-foreground">{u.readerCode}</div>

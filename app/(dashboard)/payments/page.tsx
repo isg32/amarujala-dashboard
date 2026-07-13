@@ -64,7 +64,7 @@ export default async function PaymentsPage({
         <h1 className="text-lg font-semibold">Payment Transactions</h1>
         {currentUser?.role === "admin" && (
           <div className="flex gap-2">
-            <Button variant="outline" render={<Link href="/payments/history" />} nativeButton={false}>
+            <Button variant="outline" render={<Link href="/payments/history" prefetch={false} />} nativeButton={false}>
               Payment History
             </Button>
             <Button variant="outline" render={<a href={`/api/export/payments?${exportQuery}`} />} nativeButton={false}>
@@ -160,7 +160,7 @@ export default async function PaymentsPage({
                 <TableRow key={t.id}>
                   <TableCell>{t.paymentDate}</TableCell>
                   <TableCell>
-                    <Link href={`/readers/${t.readerId}`} className="hover:underline">
+                    <Link href={`/readers/${t.readerId}`} prefetch={false} className="hover:underline">
                       {t.readerName}
                     </Link>
                     <div className="text-xs text-muted-foreground">{t.readerCode}</div>

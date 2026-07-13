@@ -48,7 +48,7 @@ export default async function PaymentHistoryPage({
     <div className="flex flex-col gap-6 overflow-x-auto">
       <div className="flex items-center justify-between">
         <h1 className="text-lg font-semibold">Payment History</h1>
-        <Button variant="outline" size="sm" render={<Link href="/payments" />} nativeButton={false}>
+        <Button variant="outline" size="sm" render={<Link href="/payments" prefetch={false} />} nativeButton={false}>
           Back to Transactions
         </Button>
       </div>
@@ -136,7 +136,7 @@ export default async function PaymentHistoryPage({
               {intents.map((intent) => (
                 <TableRow key={intent.id}>
                   <TableCell>
-                    <Link href={`/readers/${intent.readerId}`} className="hover:underline">
+                    <Link href={`/readers/${intent.readerId}`} prefetch={false} className="hover:underline">
                       {intent.readerName}
                     </Link>
                     <div className="text-xs text-muted-foreground">{intent.readerCode}</div>
@@ -223,7 +223,7 @@ export default async function PaymentHistoryPage({
               {dueHistory.map((row) => (
                 <TableRow key={row.id}>
                   <TableCell>
-                    <Link href={`/readers/${row.readerId}`} className="hover:underline">
+                    <Link href={`/readers/${row.readerId}`} prefetch={false} className="hover:underline">
                       {row.readerName}
                     </Link>
                     <div className="text-xs text-muted-foreground">{row.readerCode}</div>

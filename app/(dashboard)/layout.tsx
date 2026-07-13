@@ -18,7 +18,7 @@ export default async function DashboardLayout({
         <header className="flex items-center justify-between border-b bg-card px-6 py-3">
           <span className="font-semibold">Reader Management Dashboard</span>
           <SignedOut>
-            <Link href="/auth/sign-in" className="text-sm underline">
+            <Link href="/auth/sign-in" prefetch={false} className="text-sm underline">
               Sign In
             </Link>
           </SignedOut>

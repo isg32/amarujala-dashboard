@@ -81,7 +81,7 @@ export default async function ReaderProfilePage({
               <Button
                 variant="outline"
                 size="sm"
-                render={<Link href={`/readers/${reader.id}/transfer`} />}
+                render={<Link href={`/readers/${reader.id}/transfer`} prefetch={false} />}
                 nativeButton={false}
               >
                 Transfer

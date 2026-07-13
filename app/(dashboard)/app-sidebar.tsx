@@ -18,6 +18,7 @@ import {
   UserCog,
   Tag,
   MessageSquareText,
+  FlaskConical,
 } from "lucide-react";
 import { UserButton } from "@neondatabase/auth/react/ui";
 import { ThemeToggle } from "./theme-toggle";
@@ -55,6 +56,7 @@ const MASTER_DATA_LINKS = [
   { href: "/master-data/pocs", label: "POCs", icon: UserCog },
   { href: "/master-data/pricing", label: "Pricing", icon: Tag },
   { href: "/master-data/sms-templates", label: "SMS Templates", icon: MessageSquareText },
+  { href: "/master-data/diagnostics", label: "SMS & Payment Testing", icon: FlaskConical },
 ];
 
 function NavLink({
@@ -70,7 +72,7 @@ function NavLink({
 }) {
   return (
     <SidebarMenuItem>
-      <SidebarMenuButton isActive={active} render={<Link href={href} />}>
+      <SidebarMenuButton isActive={active} render={<Link href={href} prefetch={false} />}>
         <Icon />
         <span>{label}</span>
       </SidebarMenuButton>
@@ -96,6 +98,7 @@ export function AppSidebar({
       <SidebarHeader className="px-3 py-4">
         <Link
           href="/dashboard"
+          prefetch={false}
           className="flex items-center gap-2 px-1 font-semibold text-sidebar-foreground"
         >
           <Image
@@ -171,6 +174,7 @@ export function AppSidebar({
         <div className="flex items-center justify-between px-1">
           <Link
             href="/account/settings"
+            prefetch={false}
             className="text-xs text-sidebar-foreground/70 hover:text-sidebar-foreground"
           >
             Settings

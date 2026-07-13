@@ -70,7 +70,7 @@ export function ReaderTable({ readers, isAdmin }: { readers: Reader[]; isAdmin: 
     <div className="flex flex-col gap-3">
       {isAdmin && (
         <div className="flex flex-wrap items-center gap-2">
-          <Button variant="outline" size="sm" render={<Link href="/attendance" />} nativeButton={false}>
+          <Button variant="outline" size="sm" render={<Link href="/attendance" prefetch={false} />} nativeButton={false}>
             Mark Attendance
           </Button>
           <Button
@@ -139,7 +139,7 @@ export function ReaderTable({ readers, isAdmin }: { readers: Reader[]; isAdmin: 
                 </TableCell>
               )}
               <TableCell>
-                <Link href={`/readers/${reader.id}`} className="hover:underline">
+                <Link href={`/readers/${reader.id}`} prefetch={false} className="hover:underline">
                   {reader.name}
                 </Link>
                 <div className="text-xs text-muted-foreground">{reader.readerCode}</div>

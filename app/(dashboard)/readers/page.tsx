@@ -71,10 +71,10 @@ export default async function ReadersPage({
           )}
           {canAddReaders && (
             <>
-              <Button variant="outline" render={<Link href="/readers/bulk-upload" />} nativeButton={false}>
+              <Button variant="outline" render={<Link href="/readers/bulk-upload" prefetch={false} />} nativeButton={false}>
                 Bulk Upload
               </Button>
-              <Button render={<Link href="/readers/new" />} nativeButton={false}>
+              <Button render={<Link href="/readers/new" prefetch={false} />} nativeButton={false}>
                 Add Reader
               </Button>
             </>
