@@ -1,4 +1,4 @@
-import { headers } from "next/headers";
+import { publicUrl } from "@/lib/public-url";
 import { getPaymentIntentByTxnId } from "@/lib/data/payments";
 import { getPayuCredentials, PAYU_ENDPOINT } from "@/lib/payu/config";
 import { computeForwardHash } from "@/lib/payu/hash";
@@ -40,8 +40,7 @@ export default async function PayPage({
     email,
   });
 
-  const origin = (await headers()).get("origin") ?? `https://${(await headers()).get("host")}`;
-  const webhookUrl = `${origin}/api/payu/webhook`;
+  const webhookUrl = await publicUrl("/api/payu/webhook");
 
   return (
     <div className="flex min-h-screen items-center justify-center bg-background text-foreground">

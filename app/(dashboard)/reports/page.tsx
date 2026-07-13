@@ -55,7 +55,7 @@ export default async function ReportsPage({
         {isAdmin && (
           <Button
             variant="outline"
-            render={<a href={`/api/export/reports/${type}?${exportQuery}`} />}
+            render={<a href={`${process.env.NEXT_PUBLIC_BASE_PATH ?? ""}/api/export/reports/${type}?${exportQuery}`} />}
             nativeButton={false}
           >
             Export

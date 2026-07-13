@@ -36,7 +36,11 @@ function defaultVariables(type: TemplateType): Record<string, string> {
   const now = new Date();
   const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
   const monthEnd = new Date(now.getFullYear(), now.getMonth() + 1, 0);
+  // NEXT_PUBLIC_-prefixed, so it's inlined into the client bundle at build
+  // time (see next.config.ts's basePath) — plain string concatenation here
+  // doesn't get Next's automatic next/link-style basePath prefixing.
   const origin = typeof window !== "undefined" ? window.location.origin : "";
+  const basePath = process.env.NEXT_PUBLIC_BASE_PATH ?? "";
   const shared = { name: "Test Customer", amount: "500.00" };
   if (type === "reminder") {
     return {
@@ -50,7 +54,7 @@ function defaultVariables(type: TemplateType): Record<string, string> {
     ...shared,
     startDate: formatDMY(monthStart),
     endDate: formatDMY(monthEnd),
-    payUrl: `${origin}/pay?id=TEST`,
+    payUrl: `${origin}${basePath}/pay?id=TEST`,
   };
 }
 

@@ -7,9 +7,13 @@ import { Button } from "@/components/ui/button";
 export function DeleteButton({
   action,
   confirmMessage,
+  label = "Delete",
+  pendingLabel = "Deleting...",
 }: {
   action: () => Promise<{ error: string } | void>;
   confirmMessage: string;
+  label?: string;
+  pendingLabel?: string;
 }) {
   const router = useRouter();
   const [pending, startTransition] = useTransition();
@@ -35,7 +39,7 @@ export function DeleteButton({
           });
         }}
       >
-        {pending ? "Deleting..." : "Delete"}
+        {pending ? pendingLabel : label}
       </Button>
       {error && <span className="max-w-40 text-right text-xs text-destructive">{error}</span>}
     </div>

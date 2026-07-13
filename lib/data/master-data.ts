@@ -385,6 +385,20 @@ export async function updateAdmin(id: string, name: string) {
   await db.update(appUsers).set({ name }).where(eq(appUsers.id, id));
 }
 
+// Grants the target admin the same Neon Auth internal admin role the calling
+// admin holds (see CLAUDE.md's bootstrap section) — required for THAT admin's
+// own session to later call auth.admin.createUser/removeUser/setRole (e.g. to
+// create POCs or promote further admins). Better Auth's admin plugin itself
+// enforces that the caller must already hold this role, so an admin who
+// doesn't have it yet will get a clean error here rather than silently no-op.
+export async function grantNeonAuthAdminRole(id: string) {
+  await requireAdmin();
+  const { error } = await auth.admin.setRole({ userId: id, role: "admin" });
+  if (error) {
+    throw new Error(error.message ?? "Failed to grant admin access — your own account may not hold this permission yet.");
+  }
+}
+
 export async function deleteAdmin(id: string) {
   const currentUser = await requireAdmin();
   if (currentUser.id === id) {

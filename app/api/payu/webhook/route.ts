@@ -9,7 +9,12 @@ import { computeReverseHash } from "@/lib/payu/hash";
 // verified before trusting anything else in the form body.
 export async function POST(request: Request) {
   const origin = request.headers.get("origin") ?? new URL(request.url).origin;
-  const redirect = (path: string) => NextResponse.redirect(new URL(path, origin), { status: 302 });
+  // Next's basePath auto-prefixing (see next.config.ts) only covers next/link
+  // and redirect() — a raw NextResponse.redirect() to an already-absolute
+  // URL needs the prefix added by hand or it 404s on the self-hosted
+  // /dashboard deployment.
+  const basePath = process.env.NEXT_PUBLIC_BASE_PATH ?? "";
+  const redirect = (path: string) => NextResponse.redirect(new URL(basePath + path, origin), { status: 302 });
 
   try {
     const formData = await request.formData();
@@ -51,7 +56,7 @@ export async function POST(request: Request) {
       // DLT-gated SMS account risks the message being dropped or the
       // account being flagged, so this logs instead until a template is
       // registered for it — same posture the old app shipped with.
-      console.log(`[PayU webhook] Payment succeeded for ${reader.name} (${reader.mobile}). Invoice: ${origin}/api/invoice/${txnid}`);
+      console.log(`[PayU webhook] Payment succeeded for ${reader.name} (${reader.mobile}). Invoice: ${origin}${basePath}/api/invoice/${txnid}`);
     }
 
     return redirect("/pay/success");

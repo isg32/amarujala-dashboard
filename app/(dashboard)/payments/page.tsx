@@ -67,7 +67,7 @@ export default async function PaymentsPage({
             <Button variant="outline" render={<Link href="/payments/history" prefetch={false} />} nativeButton={false}>
               Payment History
             </Button>
-            <Button variant="outline" render={<a href={`/api/export/payments?${exportQuery}`} />} nativeButton={false}>
+            <Button variant="outline" render={<a href={`${process.env.NEXT_PUBLIC_BASE_PATH ?? ""}/api/export/payments?${exportQuery}`} />} nativeButton={false}>
               Export
             </Button>
           </div>

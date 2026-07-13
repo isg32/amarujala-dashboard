@@ -102,7 +102,7 @@ export function AppSidebar({
           className="flex items-center gap-2 px-1 font-semibold text-sidebar-foreground"
         >
           <Image
-            src="/amar-ujala-logo.png"
+            src={`${process.env.NEXT_PUBLIC_BASE_PATH ?? ""}/amar-ujala-logo.png`}
             alt="Amar Ujala"
             width={160}
             height={26}

@@ -2,7 +2,7 @@
 
 import { z } from "zod";
 import { revalidatePath } from "next/cache";
-import { headers } from "next/headers";
+import { publicUrl } from "@/lib/public-url";
 import { requireAdmin } from "@/lib/auth/session";
 import { recordPayment, reversePayment, createPaymentLink, markPaymentIntentFailed } from "@/lib/data/payments";
 import { getReader } from "@/lib/data/readers";
@@ -67,8 +67,7 @@ export async function generatePaymentLinkAction(
       voucherCouponId: options.voucherCouponId,
       amountOverride: options.amountOverride,
     });
-    const origin = (await headers()).get("origin") ?? `https://${(await headers()).get("host")}`;
-    const payUrl = `${origin}/pay?id=${txnId}`;
+    const payUrl = await publicUrl(`/pay?id=${txnId}`);
     const message = await previewPaymentLinkMessage(reader, payUrl, {
       startDate: options.startDate ? isoToDMY(options.startDate) : undefined,
       endDate: options.endDate ? isoToDMY(options.endDate) : undefined,
@@ -122,8 +121,7 @@ export async function previewPaymentLinkMessageAction(
   try {
     const reader = await getReader(readerId);
     if (!reader) throw new Error("Reader not found.");
-    const origin = (await headers()).get("origin") ?? `https://${(await headers()).get("host")}`;
-    const payUrl = `${origin}/pay?id=PREVIEW`;
+    const payUrl = await publicUrl("/pay?id=PREVIEW");
     const message = await previewPaymentLinkMessage(reader, payUrl, {
       startDate: startDate ? isoToDMY(startDate) : undefined,
       endDate: endDate ? isoToDMY(endDate) : undefined,
@@ -150,14 +148,14 @@ export type BulkSendResult = {
 // one bad row doesn't block the rest — but every failure is still reported
 // back by name and reason rather than silently counted.
 export async function sendBulkPaymentLinksAction(readerIds: number[]): Promise<BulkSendResult> {
-  const origin = (await headers()).get("origin") ?? `https://${(await headers()).get("host")}`;
   let sent = 0;
   const failures: BulkSendResult["failures"] = [];
 
   for (const readerId of readerIds) {
     try {
       const { txnId, reader, amount } = await createPaymentLink(readerId);
-      const smsResult = await sendPaymentLinkSms(reader, `${origin}/pay?id=${txnId}`, { amount });
+      const payUrl = await publicUrl(`/pay?id=${txnId}`);
+      const smsResult = await sendPaymentLinkSms(reader, payUrl, { amount });
       if (smsResult.success) {
         sent++;
       } else {

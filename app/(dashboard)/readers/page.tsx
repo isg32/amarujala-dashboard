@@ -38,6 +38,9 @@ export default async function ReadersPage({
   const status = params.status === "active" || params.status === "inactive" ? params.status : undefined;
   const dueOnly = params.dueOnly === "true";
   const page = Math.max(1, Number(params.page) || 1);
+  const hasFilters = Boolean(
+    params.search || params.status || params.centerId || params.unitId || params.landmark || dueOnly || params.newlyAdded === "true"
+  );
 
   const currentUser = await getCurrentAppUser();
   const isAdmin = currentUser?.role === "admin";
@@ -92,7 +95,7 @@ export default async function ReadersPage({
         </div>
         <div className="flex gap-2">
           {isAdmin && (
-            <Button variant="outline" render={<a href={`/api/export/readers?${exportQuery}`} />} nativeButton={false}>
+            <Button variant="outline" render={<a href={`${process.env.NEXT_PUBLIC_BASE_PATH ?? ""}/api/export/readers?${exportQuery}`} />} nativeButton={false}>
               Export
             </Button>
           )}
@@ -190,6 +193,11 @@ export default async function ReadersPage({
               Show only with due payments
             </label>
             <Button type="submit" variant="outline">Apply filters</Button>
+            {hasFilters && (
+              <Button variant="outline" render={<Link href="/readers" prefetch={false} />} nativeButton={false}>
+                Clear filters
+              </Button>
+            )}
           </form>
         </CardContent>
       </Card>

@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { updateAdminAction, deleteAdminAction } from "../actions";
+import { updateAdminAction, deleteAdminAction, grantAdminAccessAction } from "../actions";
 import { TableRow, TableCell } from "@/components/ui/table";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
@@ -25,6 +25,12 @@ export function AdminRow({ admin, isSelf }: { admin: Admin; isSelf: boolean }) {
           <Button type="button" variant="outline" size="xs" onClick={() => setEditing(true)}>
             Edit
           </Button>
+          <DeleteButton
+            action={grantAdminAccessAction.bind(null, admin.id)}
+            confirmMessage={`Grant "${admin.name}" the same admin access level as you (lets them create/delete other admins and POCs)?`}
+            label="Grant Admin Access"
+            pendingLabel="Granting..."
+          />
           {isSelf ? (
             <span className="text-xs text-muted-foreground">You</span>
           ) : (

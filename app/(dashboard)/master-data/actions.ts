@@ -27,6 +27,7 @@ import {
   createAdmin,
   updateAdmin,
   deleteAdmin,
+  grantNeonAuthAdminRole,
 } from "@/lib/data/master-data";
 
 const nameSchema = z.string().trim().min(1, "Name is required");
@@ -287,5 +288,11 @@ export async function deleteAdminAction(id: string): Promise<ActionResult> {
   return toActionResult(async () => {
     await deleteAdmin(id);
     revalidatePath("/master-data/pocs");
+  });
+}
+
+export async function grantAdminAccessAction(id: string): Promise<ActionResult> {
+  return toActionResult(async () => {
+    await grantNeonAuthAdminRole(id);
   });
 }
