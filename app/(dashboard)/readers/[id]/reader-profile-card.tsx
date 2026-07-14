@@ -18,7 +18,6 @@ type Reader = {
   centerName: string;
   pocName: string | null;
   subscriptionStartDate: string;
-  outstandingBalance: string;
   status: "active" | "inactive";
 };
 
@@ -92,10 +91,6 @@ export function ReaderProfileCard({
           <div>
             <div className="text-muted-foreground">Subscription Start</div>
             <div>{reader.subscriptionStartDate}</div>
-          </div>
-          <div>
-            <div className="text-muted-foreground">Outstanding Balance</div>
-            <div>₹{reader.outstandingBalance}</div>
           </div>
           <div>
             <div className="text-muted-foreground">Address</div>
