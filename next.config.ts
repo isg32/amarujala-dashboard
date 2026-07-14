@@ -7,6 +7,10 @@ const nextConfig: NextConfig = {
   // CLAUDE.md's deployment notes. Baked in at build time; changing it needs
   // a rebuild, not just a restart.
   basePath: process.env.NEXT_PUBLIC_BASE_PATH || undefined,
+  // Prevents Next.js from redirecting between /dashboard and /dashboard/
+  // endlessly when the internal path is / — harmless on Vercel, required
+  // under nginx + basePath where the root URL triggers the redirect loop.
+  skipTrailingSlashRedirect: true,
 };
 
 export default nextConfig;
