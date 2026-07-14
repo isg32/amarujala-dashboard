@@ -1,8 +1,10 @@
 import Link from "next/link";
+import { Suspense } from "react";
 import { SignedOut } from "@neondatabase/auth/react/ui";
 import { getCurrentAppUser } from "@/lib/auth/session";
 import { SidebarProvider, SidebarInset, SidebarTrigger } from "@/components/ui/sidebar";
 import { Separator } from "@/components/ui/separator";
+import { NavigationProgress } from "@/components/navigation-progress";
 import { AppSidebar } from "./app-sidebar";
 
 export default async function DashboardLayout({
@@ -30,6 +32,9 @@ export default async function DashboardLayout({
 
   return (
     <SidebarProvider>
+      <Suspense fallback={null}>
+        <NavigationProgress />
+      </Suspense>
       <AppSidebar isAdmin={user.role === "admin"} userName={user.name} userEmail={user.email} />
       <SidebarInset>
         <header className="flex items-center gap-3 border-b bg-card px-4 py-3">
