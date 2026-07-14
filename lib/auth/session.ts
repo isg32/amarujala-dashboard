@@ -78,6 +78,6 @@ export async function requireAppUser(): Promise<AppUser> {
 
 export async function requireAdmin(): Promise<AppUser> {
   const user = await requireAppUser();
-  if (user.role !== "admin") redirect("/dashboard");
+  if (user.role !== "admin") redirect("/");
   return user;
 }

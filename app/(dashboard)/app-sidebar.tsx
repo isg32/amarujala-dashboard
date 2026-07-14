@@ -36,7 +36,7 @@ import {
 } from "@/components/ui/sidebar";
 
 const MAIN_LINKS = [
-  { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
+  { href: "/", label: "Dashboard", icon: LayoutDashboard },
   { href: "/readers", label: "Readers", icon: Users },
   { href: "/attendance", label: "Attendance", icon: CalendarCheck },
   { href: "/payments", label: "Payments", icon: CreditCard },
@@ -91,13 +91,13 @@ export function AppSidebar({
 }) {
   const pathname = usePathname();
   const isActive = (href: string) =>
-    href === "/dashboard" ? pathname === href : pathname.startsWith(href);
+    href === "/" ? pathname === "/" : pathname.startsWith(href);
 
   return (
     <Sidebar collapsible="offcanvas">
       <SidebarHeader className="px-3 py-4">
         <Link
-          href="/dashboard"
+          href="/"
           prefetch={false}
           className="flex items-center gap-2 px-1 font-semibold text-sidebar-foreground"
         >
