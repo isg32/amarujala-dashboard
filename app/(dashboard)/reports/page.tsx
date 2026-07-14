@@ -2,6 +2,7 @@ import { requireAppUser } from "@/lib/auth/session";
 import { listReaders, listAssignableCentersWithPocs } from "@/lib/data/readers";
 import { listPaymentTransactions } from "@/lib/data/payments";
 import { getPaymentDueReport, getAttendanceReport, getGroupedReport, getMonthlySummaryReport } from "@/lib/data/reports";
+import { formatAmountDue } from "@/lib/billing/format";
 import { Card, CardContent } from "@/components/ui/card";
 import { Table, TableHeader, TableRow, TableHead, TableBody, TableCell } from "@/components/ui/table";
 import {
@@ -178,7 +179,7 @@ async function ReportTable({
               <TableCell>{r.cityName}</TableCell>
               <TableCell>{r.centerName}</TableCell>
               <TableCell>{r.status}</TableCell>
-              <TableCell>₹{r.outstandingBalance}</TableCell>
+              <TableCell>{formatAmountDue(Number(r.outstandingBalance))}</TableCell>
             </TableRow>
           ))}
         </TableBody>
@@ -206,7 +207,7 @@ async function ReportTable({
               <TableCell>{r.mobile}</TableCell>
               <TableCell>{r.cityName}</TableCell>
               <TableCell>{r.centerName}</TableCell>
-              <TableCell>₹{r.outstandingBalance}</TableCell>
+              <TableCell>{formatAmountDue(Number(r.outstandingBalance))}</TableCell>
             </TableRow>
           ))}
         </TableBody>
@@ -316,7 +317,7 @@ async function ReportTable({
             <TableCell>{r.label}</TableCell>
             <TableCell>{r.readerCount}</TableCell>
             <TableCell>₹{r.totalCollections.toFixed(2)}</TableCell>
-            <TableCell>₹{r.outstandingDues.toFixed(2)}</TableCell>
+            <TableCell>{formatAmountDue(r.outstandingDues)}</TableCell>
             <TableCell>{r.delivered}</TableCell>
             <TableCell>{r.undelivered}</TableCell>
           </TableRow>
