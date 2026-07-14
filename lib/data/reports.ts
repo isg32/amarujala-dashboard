@@ -168,11 +168,12 @@ export async function getAttendanceReport(dateFrom: string, dateTo: string, filt
 }
 
 type GroupBy = "city" | "center" | "poc";
+export type GroupedReportFilters = ReportCenterFilter & { dateFrom?: string; dateTo?: string };
 
-// Two separate grouped queries merged by label, rather than one query
-// joining both readers and payments — joining payments would fan out the
-// reader rows and inflate the outstanding-balance sum.
-export async function getGroupedReport(groupBy: GroupBy, filters: ReportCenterFilter = {}) {
+// Three separate grouped queries merged by label, rather than one query
+// joining readers/payments/attendance together — joining fan-out tables like
+// that would inflate the outstanding-balance sum and delivery counts.
+export async function getGroupedReport(groupBy: GroupBy, filters: GroupedReportFilters = {}) {
   const user = await requireAppUser();
   const scope = scopeCondition(user);
   const label = groupBy === "city" ? cities.name : groupBy === "center" ? centers.name : appUsers.name;
@@ -204,14 +205,42 @@ export async function getGroupedReport(groupBy: GroupBy, filters: ReportCenterFi
     .where(and(scope, centerFilter))
     .groupBy(label);
 
-  const [readerStats, collections] = await Promise.all([readerStatsQuery, collectionsQuery]);
+  const attendanceQuery = db
+    .select({
+      label,
+      delivered: sqlOp<number>`count(*) filter (where ${attendance.status} = 'delivered')`,
+      undelivered: sqlOp<number>`count(*) filter (where ${attendance.status} = 'not_delivered')`,
+    })
+    .from(attendance)
+    .innerJoin(readers, eq(attendance.readerId, readers.id))
+    .innerJoin(centers, eq(readers.centerId, centers.id))
+    .innerJoin(cities, eq(centers.cityId, cities.id))
+    .leftJoin(appUsers, eq(readers.assignedPocId, appUsers.id))
+    .where(
+      and(
+        scope,
+        centerFilter,
+        filters.dateFrom ? gte(attendance.attendanceDate, filters.dateFrom) : undefined,
+        filters.dateTo ? sqlOp`${attendance.attendanceDate} <= ${filters.dateTo}` : undefined
+      )
+    )
+    .groupBy(label);
+
+  const [readerStats, collections, attendanceStats] = await Promise.all([
+    readerStatsQuery,
+    collectionsQuery,
+    attendanceQuery,
+  ]);
   const collectionsByLabel = new Map(collections.map((c) => [c.label, c.totalCollections]));
+  const attendanceByLabel = new Map(attendanceStats.map((a) => [a.label, a]));
 
   return readerStats.map((r) => ({
     label: r.label ?? "(unassigned)",
     readerCount: r.readerCount,
     outstandingDues: Number(r.outstandingDues),
     totalCollections: Number(collectionsByLabel.get(r.label) ?? 0),
+    delivered: attendanceByLabel.get(r.label)?.delivered ?? 0,
+    undelivered: attendanceByLabel.get(r.label)?.undelivered ?? 0,
   }));
 }
 

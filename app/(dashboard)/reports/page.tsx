@@ -117,7 +117,11 @@ export default async function ReportsPage({
                 <Input id="search" name="search" defaultValue={params.search} placeholder="Name, mobile, ID" className="w-48" />
               </div>
             )}
-            {(type === "attendance" || type === "collection") && (
+            {(type === "attendance" ||
+              type === "collection" ||
+              type === "city_wise" ||
+              type === "center_wise" ||
+              type === "poc_wise") && (
               <>
                 <div className="flex flex-col gap-1.5">
                   <label htmlFor="dateFrom" className="text-sm font-medium">From</label>
@@ -293,7 +297,7 @@ async function ReportTable({
   }
 
   const groupBy = type === "city_wise" ? "city" : type === "center_wise" ? "center" : "poc";
-  const rows = await getGroupedReport(groupBy, { centerId });
+  const rows = await getGroupedReport(groupBy, { centerId, dateFrom, dateTo });
   return (
     <ReportCard>
       <TableHeader>
@@ -302,6 +306,8 @@ async function ReportTable({
           <TableHead>Readers</TableHead>
           <TableHead>Total Collections</TableHead>
           <TableHead>Outstanding Dues</TableHead>
+          <TableHead>Delivered</TableHead>
+          <TableHead>Undelivered</TableHead>
         </TableRow>
       </TableHeader>
       <TableBody>
@@ -311,6 +317,8 @@ async function ReportTable({
             <TableCell>{r.readerCount}</TableCell>
             <TableCell>₹{r.totalCollections.toFixed(2)}</TableCell>
             <TableCell>₹{r.outstandingDues.toFixed(2)}</TableCell>
+            <TableCell>{r.delivered}</TableCell>
+            <TableCell>{r.undelivered}</TableCell>
           </TableRow>
         ))}
       </TableBody>

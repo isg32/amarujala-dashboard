@@ -79,12 +79,16 @@ export async function GET(request: Request, { params }: { params: Promise<{ type
     case "center_wise":
     case "poc_wise": {
       const groupBy = type === "city_wise" ? "city" : type === "center_wise" ? "center" : "poc";
-      const data = await getGroupedReport(groupBy, { centerId });
+      const dateFrom = searchParams.get("dateFrom") || new Date(new Date().getFullYear(), new Date().getMonth(), 1).toISOString().slice(0, 10);
+      const dateTo = searchParams.get("dateTo") || new Date().toISOString().slice(0, 10);
+      const data = await getGroupedReport(groupBy, { centerId, dateFrom, dateTo });
       rows = data.map((r) => ({
         [groupBy === "city" ? "City" : groupBy === "center" ? "Center" : "POC"]: r.label,
         Readers: r.readerCount,
         "Total Collections": r.totalCollections,
         "Outstanding Dues": r.outstandingDues,
+        Delivered: r.delivered,
+        Undelivered: r.undelivered,
       }));
       break;
     }
