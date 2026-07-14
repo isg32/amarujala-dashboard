@@ -9,6 +9,17 @@ import type { ParsedReaderRow } from "@/lib/bulk-upload/parse-readers";
 
 type Tx = Parameters<Parameters<typeof db.transaction>[0]>[0];
 
+// Drizzle wraps the real driver error in DrizzleQueryError, whose .cause
+// holds the actual Postgres error — same gotcha as isForeignKeyViolation()
+// in lib/data/master-data.ts, just for a unique-constraint violation (23505)
+// instead of a foreign-key one (23503). Backs the readers_mobile_unique
+// constraint (see lib/db/schema.ts).
+function isUniqueViolation(err: unknown): boolean {
+  if (typeof err !== "object" || err === null) return false;
+  const e = err as { code?: string; cause?: { code?: string } };
+  return e.code === "23505" || e.cause?.code === "23505";
+}
+
 export type ReaderFilters = {
   search?: string;
   status?: "active" | "inactive";
@@ -223,7 +234,12 @@ export async function createReader(input: ReaderInput) {
     }
   }
 
-  return db.transaction((tx) => insertReaderRow(tx, user.id, input));
+  try {
+    return await db.transaction((tx) => insertReaderRow(tx, user.id, input));
+  } catch (err) {
+    if (isUniqueViolation(err)) throw new Error("A reader with this mobile number already exists.");
+    throw err;
+  }
 }
 
 export type BulkCreateResult = {
@@ -390,17 +406,22 @@ export async function updateReader(
   await requireAdmin();
   const [reader] = await db.select({ id: readers.id }).from(readers).where(eq(readers.id, readerId));
   if (!reader) throw new Error("Reader not found.");
-  await db
-    .update(readers)
-    .set({
-      name: input.name,
-      mobile: input.mobile,
-      email: input.email ?? null,
-      address: input.address,
-      landmark: input.landmark ?? null,
-      status: input.status,
-    })
-    .where(eq(readers.id, readerId));
+  try {
+    await db
+      .update(readers)
+      .set({
+        name: input.name,
+        mobile: input.mobile,
+        email: input.email ?? null,
+        address: input.address,
+        landmark: input.landmark ?? null,
+        status: input.status,
+      })
+      .where(eq(readers.id, readerId));
+  } catch (err) {
+    if (isUniqueViolation(err)) throw new Error("Another reader already has this mobile number.");
+    throw err;
+  }
 }
 
 // Bulk equivalent of transferReader() — same reader_transfers audit log per

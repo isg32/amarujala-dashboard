@@ -1,23 +1,27 @@
 "use client";
 
-import { useMemo, useState } from "react";
-import { createReaderAction } from "../actions";
+import { useActionState, useMemo, useState } from "react";
+import { createReaderAction, type CreateReaderState } from "../actions";
 import { Field, FieldLabel, FieldGroup } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
+import { Alert, AlertTitle, AlertDescription } from "@/components/ui/alert";
 import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem, SelectGroup } from "@/components/ui/select";
 
 type Center = { id: number; name: string; cityName: string; pocs: { id: string; name: string }[] };
 
+const initialState: CreateReaderState = null;
+
 export function ReaderForm({ centers }: { centers: Center[] }) {
   const [centerId, setCenterId] = useState<string>("");
+  const [state, formAction, pending] = useActionState(createReaderAction, initialState);
   const pocOptions = useMemo(
     () => centers.find((c) => String(c.id) === centerId)?.pocs ?? [],
     [centers, centerId]
   );
 
   return (
-    <form action={createReaderAction} className="flex flex-col gap-3 max-w-md">
+    <form action={formAction} className="flex flex-col gap-3 max-w-md">
       <FieldGroup>
         <Field>
           <FieldLabel htmlFor="name">Reader name</FieldLabel>
@@ -92,7 +96,15 @@ export function ReaderForm({ centers }: { centers: Center[] }) {
           <Input id="remarks" name="remarks" />
         </Field>
       </FieldGroup>
-      <Button type="submit" className="self-start">Add Reader</Button>
+      <Button type="submit" disabled={pending} className="self-start">
+        {pending ? "Adding..." : "Add Reader"}
+      </Button>
+      {state?.error && (
+        <Alert variant="destructive">
+          <AlertTitle>Failed to add reader</AlertTitle>
+          <AlertDescription>{state.error}</AlertDescription>
+        </Alert>
+      )}
     </form>
   );
 }

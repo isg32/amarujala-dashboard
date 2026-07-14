@@ -192,7 +192,10 @@ export const readers = pgTable("readers", {
   id: serial("id").primaryKey(),
   readerCode: text("reader_code").notNull().unique(),
   name: text("name").notNull(),
-  mobile: text("mobile").notNull(),
+  // Confirmed no existing duplicates before adding this — see git history on
+  // this commit. Enforced at the DB level (not just app-side pre-checks) so
+  // it holds under concurrent writes and bulk upload too.
+  mobile: text("mobile").notNull().unique(),
   email: text("email"),
   address: text("address").notNull(),
   landmark: text("landmark"),

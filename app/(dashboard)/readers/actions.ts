@@ -15,7 +15,9 @@ import {
   searchReadersForPicker,
 } from "@/lib/data/readers";
 
-export async function createReaderAction(formData: FormData) {
+export type CreateReaderState = { error: string } | null;
+
+export async function createReaderAction(_prev: CreateReaderState, formData: FormData): Promise<CreateReaderState> {
   const input = readerInputSchema.parse({
     name: formData.get("name") ?? "",
     mobile: formData.get("mobile") ?? "",
@@ -28,7 +30,12 @@ export async function createReaderAction(formData: FormData) {
     remarks: formData.get("remarks") ?? "",
   });
 
-  const { id } = await createReader(input);
+  let id: number;
+  try {
+    ({ id } = await createReader(input));
+  } catch (e) {
+    return { error: e instanceof Error ? e.message : "Failed to add reader." };
+  }
   redirect(`/readers/${id}`);
 }
 
