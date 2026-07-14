@@ -99,7 +99,30 @@ test("in-progress month only bills up to today, not the full month", () => {
     pricingHistory: JULY_PRICE,
     today: "2026-07-10", // month still in progress
   });
-  assert.equal(charge, 100); // days 1-10 = 10 days * 10/day
+  // Days 1-9 default in (unmarkedDefault); day 10 is "today" itself and
+  // unmarked, so it's excluded until someone actually marks it — see the
+  // dedicated test below for that behavior in isolation.
+  assert.equal(charge, 90); // 9 days * 10/day
+});
+
+test("today itself is excluded from the live total until marked, even though earlier unmarked days still default in", () => {
+  const charge = calculateMonthCharge({
+    billingPeriod: "2026-07",
+    subscriptionStartDate: "2026-01-01",
+    attendance: {},
+    pricingHistory: JULY_PRICE,
+    today: "2026-07-10",
+  });
+  assert.equal(charge, 90); // 9 days * 10/day — day 10 (today) not charged yet
+
+  const chargeOnceMarked = calculateMonthCharge({
+    billingPeriod: "2026-07",
+    subscriptionStartDate: "2026-01-01",
+    attendance: { "2026-07-10": "delivered" },
+    pricingHistory: JULY_PRICE,
+    today: "2026-07-10",
+  });
+  assert.equal(chargeOnceMarked, 100); // marking today explicitly makes it count immediately
 });
 
 test("subscription starting after the queried month bills zero", () => {

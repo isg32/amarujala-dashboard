@@ -77,7 +77,9 @@ export interface CalculateCycleChargeParams {
   /**
    * 'YYYY-MM-DD', defaults to the real current date. Caps the billed range
    * so an in-progress cycle's live total only covers days that have
-   * actually happened yet. For a past/completed cycle this has no effect.
+   * actually happened yet, and if `today` itself has no attendance row yet
+   * it's excluded entirely (not defaulted in) until someone marks it — see
+   * the loop below. For a past/completed cycle this has no effect.
    */
   today?: string;
   /** Optional Day Rates overrides — see resolveDailyRate(). */
@@ -109,7 +111,17 @@ export function calculateCycleCharge(params: CalculateCycleChargeParams): number
   const end = new Date(periodEnd + "T00:00:00Z");
   while (cursor <= end) {
     const dateStr = cursor.toISOString().slice(0, 10);
-    const status = params.attendance[dateStr] ?? unmarkedDefault;
+    const explicit = params.attendance[dateStr];
+    // Today doesn't count either way until someone actually marks it — a day
+    // still in progress hasn't been confirmed delivered, so defaulting it in
+    // (same as any other unmarked day) charges for something that hasn't
+    // necessarily happened yet. Past days keep using unmarkedDefault as
+    // normal; this only holds back the one day that's still live.
+    if (explicit === undefined && dateStr === today) {
+      cursor.setUTCDate(cursor.getUTCDate() + 1);
+      continue;
+    }
+    const status = explicit ?? unmarkedDefault;
     if (status !== "not_delivered") {
       total += resolveDailyRate({
         date: dateStr,
