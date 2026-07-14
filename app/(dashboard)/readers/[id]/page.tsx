@@ -121,7 +121,9 @@ export default async function ReaderProfilePage({
                       {entry.description ? ` — ${entry.description}` : ""}
                     </div>
                   </div>
-                  <div className={Number(entry.amount) < 0 ? "text-primary" : ""}>₹{entry.amount}</div>
+                  <div className={Number(entry.amount) < 0 ? "text-primary" : ""}>
+                    ₹{Math.abs(Number(entry.amount)).toFixed(2)}
+                  </div>
                 </div>
               ))}
             </div>
