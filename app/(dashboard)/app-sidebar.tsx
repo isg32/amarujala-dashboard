@@ -110,7 +110,7 @@ export function AppSidebar({
           />
         </Link>
       </SidebarHeader>
-      <SidebarContent>
+      <SidebarContent className="scroll-shadow-y">
         <SidebarGroup>
           <SidebarGroupContent>
             <SidebarMenu>

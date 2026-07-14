@@ -1,5 +1,5 @@
 import { requireAppUser } from "@/lib/auth/session";
-import { listReaders, getReader } from "@/lib/data/readers";
+import { getReader } from "@/lib/data/readers";
 import { listAttendanceForReader } from "@/lib/data/attendance";
 import { listCenters, listCities, listUnits } from "@/lib/data/master-data";
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from "@/components/ui/card";
@@ -34,9 +34,6 @@ export default async function AttendancePage({
     );
   }
 
-  const readerRows = await listReaders();
-  const readerOptions = readerRows.map((r) => ({ id: r.id, label: `${r.name} (${r.readerCode})` }));
-
   const [centerRows, cityRows, unitRows] = isAdmin
     ? await Promise.all([listCenters(), listCities(), listUnits()])
     : [[], [], []];
@@ -54,7 +51,9 @@ export default async function AttendancePage({
           <CardDescription>Pick a reader and click any day to toggle it between Delivered and Undelivered.</CardDescription>
         </CardHeader>
         <CardContent className="flex flex-col gap-4">
-          <ReaderPicker readerOptions={readerOptions} selectedReaderId={selectedReaderId} />
+          <ReaderPicker
+            selectedReaderLabel={selectedReader ? `${selectedReader.name} (${selectedReader.readerCode})` : undefined}
+          />
 
           {selectedReaderId && !selectedReader && (
             <p className="text-sm text-muted-foreground">Reader not found, or outside your assigned Centers.</p>
@@ -76,7 +75,6 @@ export default async function AttendancePage({
         <CardContent>
           <AttendanceForm
             isAdmin={isAdmin}
-            readerOptions={readerOptions}
             centerOptions={centerRows.map((c) => ({ id: c.id, label: `${c.name} (${c.cityName})` }))}
             cityOptions={cityRows.map((c) => ({ id: c.id, label: `${c.name} (${c.unitName})` }))}
             unitOptions={unitRows.map((u) => ({ id: u.id, label: `${u.name} (${u.zoneName})` }))}

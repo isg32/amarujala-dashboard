@@ -1,31 +1,17 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem, SelectGroup } from "@/components/ui/select";
+import { ReaderSearchCombobox } from "../readers/reader-search-combobox";
 
-type Option = { id: number; label: string };
-
-export function ReaderPicker({ readerOptions, selectedReaderId }: { readerOptions: Option[]; selectedReaderId?: number }) {
+export function ReaderPicker({ selectedReaderLabel }: { selectedReaderLabel?: string }) {
   const router = useRouter();
 
   return (
-    <Select
-      value={selectedReaderId ? String(selectedReaderId) : undefined}
-      onValueChange={(v) => router.push(v ? `/attendance?readerId=${v}` : "/attendance")}
-      items={Object.fromEntries(readerOptions.map((o) => [String(o.id), o.label]))}
-    >
-      <SelectTrigger className="w-72">
-        <SelectValue placeholder="Select a reader" />
-      </SelectTrigger>
-      <SelectContent>
-        <SelectGroup>
-          {readerOptions.map((o) => (
-            <SelectItem key={o.id} value={String(o.id)}>
-              {o.label}
-            </SelectItem>
-          ))}
-        </SelectGroup>
-      </SelectContent>
-    </Select>
+    <div className="w-72">
+      <ReaderSearchCombobox
+        initialLabel={selectedReaderLabel}
+        onSelect={(reader) => router.push(`/attendance?readerId=${reader.id}`)}
+      />
+    </div>
   );
 }

@@ -12,6 +12,7 @@ import {
   bulkTransferReaders,
   bulkUpdateReaderStatus,
   bulkUpdateReaderLandmark,
+  searchReadersForPicker,
 } from "@/lib/data/readers";
 
 export async function createReaderAction(formData: FormData) {
@@ -89,4 +90,25 @@ export async function bulkUpdateReaderLandmarkAction(readerIds: number[], landma
   const { updated } = await bulkUpdateReaderLandmark(readerIds, landmark);
   revalidatePath("/readers");
   return { message: `Updated landmark for ${updated} reader(s).` };
+}
+
+export type ReaderSearchResult = {
+  id: number;
+  name: string;
+  readerCode: string;
+  mobile: string;
+  centerName: string;
+  cityName: string;
+};
+
+export async function searchReadersAction(query: string): Promise<ReaderSearchResult[]> {
+  const rows = await searchReadersForPicker(query);
+  return rows.map((r) => ({
+    id: r.id,
+    name: r.name,
+    readerCode: r.readerCode,
+    mobile: r.mobile,
+    centerName: r.centerName,
+    cityName: r.cityName,
+  }));
 }

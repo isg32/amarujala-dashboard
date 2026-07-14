@@ -2,6 +2,7 @@
 
 import { useActionState, useState } from "react";
 import { markAttendanceAction, type AttendanceActionState } from "./actions";
+import { ReaderSearchCombobox } from "../readers/reader-search-combobox";
 import { Field, FieldLabel, FieldGroup } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
@@ -21,19 +22,18 @@ const initialState: AttendanceActionState = null;
 
 export function AttendanceForm({
   isAdmin,
-  readerOptions,
   centerOptions,
   cityOptions,
   unitOptions,
 }: {
   isAdmin: boolean;
-  readerOptions: Option[];
   centerOptions: Option[];
   cityOptions: Option[];
   unitOptions: Option[];
 }) {
   const [state, formAction, pending] = useActionState(markAttendanceAction, initialState);
   const [scope, setScope] = useState<string>("reader");
+  const [readerId, setReaderId] = useState<number | null>(null);
 
   const scopeOptions = isAdmin
     ? [
@@ -46,7 +46,7 @@ export function AttendanceForm({
     : [{ value: "reader", label: "Individual Reader" }];
 
   const targetOptions: Option[] =
-    scope === "reader" ? readerOptions : scope === "center" ? centerOptions : scope === "city" ? cityOptions : scope === "unit" ? unitOptions : [];
+    scope === "center" ? centerOptions : scope === "city" ? cityOptions : scope === "unit" ? unitOptions : [];
 
   return (
     <form action={formAction} className="flex flex-col gap-3 max-w-md">
@@ -74,11 +74,19 @@ export function AttendanceForm({
           </Select>
         </Field>
 
-        {scope !== "org" && (
+        {scope === "reader" && (
           <Field>
-            <FieldLabel htmlFor="scopeId">{scope === "reader" ? "Reader" : "Target"}</FieldLabel>
+            <FieldLabel htmlFor="readerSearch">Reader</FieldLabel>
+            <ReaderSearchCombobox inputId="readerSearch" onSelect={(r) => setReaderId(r.id)} />
+            <input type="hidden" name="readerId" value={readerId ?? ""} />
+          </Field>
+        )}
+
+        {scope !== "reader" && scope !== "org" && (
+          <Field>
+            <FieldLabel htmlFor="scopeId">Target</FieldLabel>
             <Select
-              name={scope === "reader" ? "readerId" : "scopeId"}
+              name="scopeId"
               required
               items={Object.fromEntries(targetOptions.map((o) => [String(o.id), o.label]))}
             >
@@ -125,7 +133,7 @@ export function AttendanceForm({
           </Select>
         </Field>
       </FieldGroup>
-      <Button type="submit" disabled={pending} className="self-start">
+      <Button type="submit" disabled={pending || (scope === "reader" && !readerId)} className="self-start">
         {pending ? "Marking..." : "Mark Attendance"}
       </Button>
 

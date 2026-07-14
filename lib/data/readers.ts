@@ -110,11 +110,21 @@ function buildReaderConditions(user: AppUser, filters: ReaderFilters) {
   return and(...conditions.filter((c) => c !== undefined));
 }
 
-// Unpaginated — for exports, reports, and the attendance page's reader
-// picker, all of which need every matching row, not one page.
+// Unpaginated — for exports and reports, which need every matching row, not
+// one page. Don't use this for a picker UI — see searchReadersForPicker().
 export async function listReaders(filters: ReaderFilters = {}) {
   const user = await requireAppUser();
   return baseReaderQuery().where(buildReaderConditions(user, filters)).orderBy(desc(readers.createdAt));
+}
+
+// Backs search-as-you-type reader pickers (attendance page) — capped, so it
+// stays cheap regardless of org size, unlike shipping every reader to the
+// client the way the picker used to.
+export async function searchReadersForPicker(search: string, limit = 20) {
+  const user = await requireAppUser();
+  if (!search.trim()) return [];
+  const where = buildReaderConditions(user, { search });
+  return baseReaderQuery().where(where).orderBy(desc(readers.createdAt)).limit(limit);
 }
 
 // For the reader directory table: one page of rows plus the total count of

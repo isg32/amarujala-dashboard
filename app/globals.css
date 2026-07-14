@@ -159,3 +159,21 @@
 .animate-progress {
   animation: progress 1.2s ease-in-out infinite;
 }
+
+/* Fades in a shadow at the top/bottom edge of a scrollable container only
+   when there's more content to scroll to in that direction — the classic
+   pure-CSS scroll-shadow trick (two gradients that scroll with the content
+   to mask the shadow once you hit an edge, two that stay fixed to draw it).
+   No JS scroll listener needed. Used on the sidebar nav so short-viewport
+   users get a visual cue it scrolls, without permanently showing a
+   scrollbar (the sidebar deliberately hides its native one). */
+.scroll-shadow-y {
+  background:
+    linear-gradient(var(--sidebar) 30%, transparent) top,
+    linear-gradient(transparent, var(--sidebar) 70%) bottom,
+    radial-gradient(farthest-side at 50% 0, color-mix(in srgb, var(--sidebar-foreground) 35%, transparent), transparent) top,
+    radial-gradient(farthest-side at 50% 100%, color-mix(in srgb, var(--sidebar-foreground) 35%, transparent), transparent) bottom;
+  background-repeat: no-repeat;
+  background-size: 100% 40px, 100% 40px, 100% 14px, 100% 14px;
+  background-attachment: local, local, scroll, scroll;
+}
