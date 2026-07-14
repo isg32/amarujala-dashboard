@@ -28,6 +28,7 @@ import {
   updateAdmin,
   deleteAdmin,
   grantNeonAuthAdminRole,
+  resetAdminPassword,
 } from "@/lib/data/master-data";
 
 const nameSchema = z.string().trim().min(1, "Name is required");
@@ -294,5 +295,13 @@ export async function deleteAdminAction(id: string): Promise<ActionResult> {
 export async function grantAdminAccessAction(id: string): Promise<ActionResult> {
   return toActionResult(async () => {
     await grantNeonAuthAdminRole(id);
+  });
+}
+
+export async function resetAdminPasswordAction(formData: FormData): Promise<ActionResult> {
+  const id = z.string().min(1).parse(formData.get("id"));
+  const newPassword = z.string().min(8, "Password must be at least 8 characters").parse(formData.get("newPassword"));
+  return toActionResult(async () => {
+    await resetAdminPassword(id, newPassword);
   });
 }

@@ -385,6 +385,19 @@ export async function updateAdmin(id: string, name: string) {
   await db.update(appUsers).set({ name }).where(eq(appUsers.id, id));
 }
 
+// Gated on the caller's own canManageAdminPasswords flag, not just
+// requireAdmin() — resetting a fellow admin's password is a privilege tier
+// above regular admin (see app_users.can_manage_admin_passwords in
+// lib/db/schema.ts), unlike POC password reset, which any admin can already
+// do via updatePoc().
+export async function resetAdminPassword(id: string, newPassword: string) {
+  const user = await requireAdmin();
+  if (!user.canManageAdminPasswords) {
+    throw new Error("You don't have permission to reset another administrator's password.");
+  }
+  await auth.admin.setUserPassword({ userId: id, newPassword });
+}
+
 // Grants the target admin the same Neon Auth internal admin role the calling
 // admin holds (see CLAUDE.md's bootstrap section) — required for THAT admin's
 // own session to later call auth.admin.createUser/removeUser/setRole (e.g. to

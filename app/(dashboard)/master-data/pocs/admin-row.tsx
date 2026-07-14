@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { updateAdminAction, deleteAdminAction, grantAdminAccessAction } from "../actions";
+import { updateAdminAction, deleteAdminAction, grantAdminAccessAction, resetAdminPasswordAction } from "../actions";
 import { TableRow, TableCell } from "@/components/ui/table";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
@@ -10,7 +10,15 @@ import { DeleteButton } from "../delete-button";
 
 type Admin = { id: string; name: string; email: string };
 
-export function AdminRow({ admin, isSelf }: { admin: Admin; isSelf: boolean }) {
+export function AdminRow({
+  admin,
+  isSelf,
+  canManageAdminPasswords,
+}: {
+  admin: Admin;
+  isSelf: boolean;
+  canManageAdminPasswords: boolean;
+}) {
   const router = useRouter();
   const [editing, setEditing] = useState(false);
   const [pending, setPending] = useState(false);
@@ -52,12 +60,23 @@ export function AdminRow({ admin, isSelf }: { admin: Admin; isSelf: boolean }) {
             setPending(true);
             setError(null);
             const result = await updateAdminAction(formData);
-            setPending(false);
-            if (result && "error" in result) setError(result.error);
-            else {
-              setEditing(false);
-              router.refresh();
+            if (result && "error" in result) {
+              setPending(false);
+              setError(result.error);
+              return;
             }
+            const newPassword = formData.get("newPassword");
+            if (canManageAdminPasswords && newPassword) {
+              const pwResult = await resetAdminPasswordAction(formData);
+              if (pwResult && "error" in pwResult) {
+                setPending(false);
+                setError(pwResult.error);
+                return;
+              }
+            }
+            setPending(false);
+            setEditing(false);
+            router.refresh();
           }}
           className="flex flex-wrap items-end gap-3"
         >
@@ -69,6 +88,21 @@ export function AdminRow({ admin, isSelf }: { admin: Admin; isSelf: boolean }) {
             <Input id={`name-${admin.id}`} name="name" defaultValue={admin.name} className="w-48" required />
           </div>
           <span className="text-xs text-muted-foreground">{admin.email} (not editable)</span>
+          {canManageAdminPasswords && (
+            <div className="flex flex-col gap-1">
+              <label className="text-xs text-muted-foreground" htmlFor={`newPassword-${admin.id}`}>
+                Reset password (optional)
+              </label>
+              <Input
+                id={`newPassword-${admin.id}`}
+                name="newPassword"
+                type="password"
+                minLength={8}
+                placeholder="Leave blank to keep current"
+                className="w-40"
+              />
+            </div>
+          )}
           <Button type="submit" size="sm" disabled={pending}>
             {pending ? "Saving..." : "Save"}
           </Button>

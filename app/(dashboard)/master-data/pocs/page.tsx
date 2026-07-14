@@ -73,7 +73,12 @@ export default async function PocsPage() {
             </TableHeader>
             <TableBody>
               {admins.map((admin) => (
-                <AdminRow key={admin.id} admin={admin} isSelf={admin.id === currentUser.id} />
+                <AdminRow
+                  key={admin.id}
+                  admin={admin}
+                  isSelf={admin.id === currentUser.id}
+                  canManageAdminPasswords={currentUser.canManageAdminPasswords}
+                />
               ))}
             </TableBody>
           </Table>

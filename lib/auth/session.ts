@@ -32,6 +32,10 @@ export type AppUser = {
   // 4th (sendPaymentReminder) checks this flag directly since it has no
   // permissions flag of its own.
   suspended: boolean;
+  // A privilege tier above regular admin — lets this account reset another
+  // ADMIN's password (any admin can already reset a POC's). Always false
+  // for au_poc rows; only meaningful for role === "admin".
+  canManageAdminPasswords: boolean;
 };
 
 // The single chokepoint that turns a Neon Auth session into an app-level
@@ -67,7 +71,16 @@ export const getCurrentAppUser = cache(async (): Promise<AppUser | null> => {
     if (row.suspended) permissions = NO_PERMISSIONS;
   }
 
-  return { id: row.id, name: row.name, email: row.email, role: row.role, centerIds, permissions, suspended: row.suspended };
+  return {
+    id: row.id,
+    name: row.name,
+    email: row.email,
+    role: row.role,
+    centerIds,
+    permissions,
+    suspended: row.suspended,
+    canManageAdminPasswords: row.canManageAdminPasswords,
+  };
 });
 
 export async function requireAppUser(): Promise<AppUser> {

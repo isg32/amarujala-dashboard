@@ -103,6 +103,13 @@ export const appUsers = pgTable("app_users", {
   // alternative to deletePoc for "this person shouldn't act right now but
   // keep their history/access intact."
   suspended: boolean("suspended").notNull().default(false),
+  // A privilege tier above regular admin — today every admin is otherwise
+  // equal (any admin can already reset any POC's password via updatePoc()),
+  // but resetting a fellow ADMIN's password has no such path for anyone.
+  // This flag is that one exception, granted per-account rather than a new
+  // role enum value so it doesn't ripple through every existing
+  // role === "admin" check in the codebase.
+  canManageAdminPasswords: boolean("can_manage_admin_passwords").notNull().default(false),
   createdAt: timestamp("created_at").notNull().defaultNow(),
 });
 
