@@ -165,8 +165,11 @@
    pure-CSS scroll-shadow trick (two gradients that scroll with the content
    to mask the shadow once you hit an edge, two that stay fixed to draw it).
    No JS scroll listener needed. Used on the sidebar nav so short-viewport
-   users get a visual cue it scrolls, without permanently showing a
-   scrollbar (the sidebar deliberately hides its native one). */
+   users get a visual cue it scrolls. Paired with a always-visible themed
+   scrollbar below (unlayered rules here beat the sidebar's own `no-scrollbar`
+   utility class, which Tailwind compiles into the lower-precedence
+   `utilities` cascade layer) — the traditional track+thumb affordance,
+   styled to fit rather than the bare OS default. */
 .scroll-shadow-y {
   background:
     linear-gradient(var(--sidebar) 30%, transparent) top,
@@ -174,6 +177,23 @@
     radial-gradient(farthest-side at 50% 0, color-mix(in srgb, var(--sidebar-foreground) 35%, transparent), transparent) top,
     radial-gradient(farthest-side at 50% 100%, color-mix(in srgb, var(--sidebar-foreground) 35%, transparent), transparent) bottom;
   background-repeat: no-repeat;
+  scrollbar-width: thin;
+  scrollbar-color: var(--sidebar-border) transparent;
   background-size: 100% 40px, 100% 40px, 100% 14px, 100% 14px;
   background-attachment: local, local, scroll, scroll;
+}
+
+.scroll-shadow-y::-webkit-scrollbar {
+  display: block;
+  width: 6px;
+}
+.scroll-shadow-y::-webkit-scrollbar-track {
+  background: transparent;
+}
+.scroll-shadow-y::-webkit-scrollbar-thumb {
+  background-color: var(--sidebar-border);
+  border-radius: 9999px;
+}
+.scroll-shadow-y::-webkit-scrollbar-thumb:hover {
+  background-color: var(--sidebar-accent);
 }
