@@ -3,7 +3,7 @@
 import { z } from "zod";
 import { requireAppUser } from "@/lib/auth/session";
 import { getReader } from "@/lib/data/readers";
-import { getAmountDue } from "@/lib/data/billing";
+import { getAmountDue, getCurrentMonthProvisional } from "@/lib/data/billing";
 import { sendPaymentReminder } from "@/lib/sms/send-reminder";
 
 export async function sendPaymentReminderAction(
@@ -16,9 +16,17 @@ export async function sendPaymentReminderAction(
   const id = z.coerce.number().int().positive().parse(readerId);
   const reader = await getReader(id);
   if (!reader) return { error: "Reader not found." };
-  // Live amount due, not the stale posted-only balance — billing no longer
-  // requires a periodic Close Month to reflect what's actually accrued.
-  const amountDue = await getAmountDue(id);
-  const result = await sendPaymentReminder({ ...reader, outstandingBalance: amountDue.toFixed(2) });
+  // Current month's unbilled provisional charge (for the {amount} tag)
+  // plus the full total (for the {total} tag) — the SMS template says
+  // "Month {month} Bill due {amount} and Total due {total}" so they
+  // need to be different when a previous balance exists.
+  const [provisional, amountDue] = await Promise.all([
+    getCurrentMonthProvisional(id),
+    getAmountDue(id),
+  ]);
+  const result = await sendPaymentReminder(
+    { ...reader, outstandingBalance: amountDue.toFixed(2) },
+    { currentMonthCharge: provisional.amount.toFixed(2), totalDue: amountDue.toFixed(2) }
+  );
   return result.success ? { message: "Reminder sent." } : { error: `SMS failed to send: ${result.error}` };
 }

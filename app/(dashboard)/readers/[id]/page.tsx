@@ -136,7 +136,7 @@ export default async function ReaderProfilePage({
           <CardTitle>Update for Manual Payment</CardTitle>
         </CardHeader>
         <CardContent className="flex flex-col gap-4">
-          {(isAdmin || currentUser?.permissions.canRecordPayments) && <RecordPaymentForm readerId={reader.id} />}
+          {(isAdmin || currentUser?.permissions.canRecordPayments) && <RecordPaymentForm readerId={reader.id} isAdmin={isAdmin} />}
           {paymentRows.length > 0 && (
             <div className="flex flex-col gap-2 text-sm">
               {paymentRows.map((p) => (
@@ -204,6 +204,7 @@ export default async function ReaderProfilePage({
             readerId={reader.id}
             attendance={attendanceRows}
             subscriptionStartDate={reader.subscriptionStartDate}
+            isAdmin={isAdmin}
           />
         </CardContent>
       </Card>

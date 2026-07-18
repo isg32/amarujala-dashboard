@@ -42,6 +42,18 @@ export async function recordPayment(input: RecordPaymentInput) {
   if (!reader) throw new Error("Reader not found.");
   assertCenterInScope(user, reader.centerId);
 
+  // POCs cannot back-date payments — if a correction is needed they must
+  // contact an Administrator to record it.
+  if (user.role === "au_poc") {
+    const today = new Date().toISOString().slice(0, 10);
+    if (input.paymentDate < today) {
+      throw new Error(
+        "Back-date payment recording is restricted to Administrators. " +
+        "Please contact an Administrator if a correction is needed."
+      );
+    }
+  }
+
   return db.transaction(async (tx) => {
     const [inserted] = await tx
       .insert(payments)

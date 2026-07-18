@@ -19,7 +19,7 @@ import {
 const initialState: RecordPaymentState = null;
 const today = new Date().toISOString().slice(0, 10);
 
-export function RecordPaymentForm({ readerId }: { readerId: number }) {
+export function RecordPaymentForm({ readerId, isAdmin = true }: { readerId: number; isAdmin?: boolean }) {
   const [state, formAction, pending] = useActionState(recordPaymentAction, initialState);
   const [method, setMethod] = useState("cash");
 
@@ -65,7 +65,8 @@ export function RecordPaymentForm({ readerId }: { readerId: number }) {
         </Field>
         <Field>
           <FieldLabel htmlFor="paymentDate">Payment date</FieldLabel>
-          <Input id="paymentDate" name="paymentDate" type="date" defaultValue={today} required />
+          <Input id="paymentDate" name="paymentDate" type="date" defaultValue={today} max={isAdmin ? undefined : today} required />
+          {!isAdmin && <span className="text-xs text-muted-foreground">Only today&apos;s date is available. Contact an Administrator for back-date corrections.</span>}
         </Field>
         <Field>
           <FieldLabel htmlFor="remarks">Remarks (optional)</FieldLabel>

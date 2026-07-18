@@ -36,6 +36,18 @@ export async function markAttendanceForReader(input: {
   }
   await assertReaderInScope(user, input.readerId);
 
+  // POCs cannot back-date attendance — if a correction is needed they must
+  // contact an Administrator to perform the update.
+  if (user.role === "au_poc") {
+    const today = new Date().toISOString().slice(0, 10);
+    if (input.dateFrom < today || input.dateTo < today) {
+      throw new Error(
+        "Back-date attendance updates are restricted to Administrators. " +
+        "Please contact an Administrator if a correction is needed."
+      );
+    }
+  }
+
   const dates = datesBetween(input.dateFrom, input.dateTo);
   const rows = dates.map((attendanceDate) => ({
     readerId: input.readerId,

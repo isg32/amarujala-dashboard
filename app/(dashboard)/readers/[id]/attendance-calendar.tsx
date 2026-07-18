@@ -32,10 +32,12 @@ export function AttendanceCalendar({
   readerId,
   attendance,
   subscriptionStartDate,
+  isAdmin = true,
 }: {
   readerId: number;
   attendance: AttendanceRow[];
   subscriptionStartDate: string;
+  isAdmin?: boolean;
 }) {
   const router = useRouter();
   const today = new Date();
@@ -148,7 +150,8 @@ export function AttendanceCalendar({
             const explicit = byDate.get(dateStr);
             const isFuture = dateStr > todayStr;
             const isBeforeSubscription = dateStr < subscriptionStartDate;
-            const disabled = isFuture || isBeforeSubscription;
+            const isPast = !isAdmin && dateStr < todayStr;
+            const disabled = isFuture || isBeforeSubscription || isPast;
             const effective: "delivered" | "not_delivered" | undefined = explicit ?? (disabled ? undefined : "delivered");
             const isToday = dateStr === todayStr;
             const isPending = pendingDate === dateStr;

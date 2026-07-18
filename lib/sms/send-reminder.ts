@@ -124,6 +124,13 @@ export function isoToDMY(isoDate: string): string {
 
 type ReminderReader = { name: string; mobile: string; outstandingBalance: string };
 
+export interface ReminderAmounts {
+  /** Current month's unbilled provisional charge — goes into the {amount} tag. */
+  currentMonthCharge: string;
+  /** Total amount due (outstanding + current month) — goes into the {total} tag. */
+  totalDue: string;
+}
+
 export interface PaymentLinkDateOverride {
   /** 'DD-MM-YYYY'; defaults to the 1st of the current month. */
   startDate?: string;
@@ -168,14 +175,16 @@ export async function previewPaymentLinkMessage(
   return renderTemplate(templateText, buildPaymentLinkVariables(reader, payUrl, opts));
 }
 
-export async function sendPaymentReminder(reader: ReminderReader): Promise<SendSmsResult> {
+export async function sendPaymentReminder(
+  reader: ReminderReader,
+  amounts?: ReminderAmounts
+): Promise<SendSmsResult> {
   const now = new Date();
-  const amount = reader.outstandingBalance;
   return sendSms(reader.mobile, "reminder", {
     name: reader.name,
     month: now.toLocaleString("en-US", { month: "long", timeZone: "UTC" }),
-    amount,
-    total: amount,
+    amount: amounts?.currentMonthCharge ?? reader.outstandingBalance,
+    total: amounts?.totalDue ?? reader.outstandingBalance,
     dueDate: endOfMonth(now),
   });
 }

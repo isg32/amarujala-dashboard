@@ -19,6 +19,7 @@ import {
 type Option = { id: number; label: string };
 
 const initialState: AttendanceActionState = null;
+const today = new Date().toISOString().slice(0, 10);
 
 export function AttendanceForm({
   isAdmin,
@@ -108,11 +109,12 @@ export function AttendanceForm({
 
         <Field>
           <FieldLabel htmlFor="dateFrom">Date from</FieldLabel>
-          <Input id="dateFrom" name="dateFrom" type="date" required />
+          <Input id="dateFrom" name="dateFrom" type="date" required max={isAdmin ? undefined : today} />
+          {!isAdmin && <span className="text-xs text-muted-foreground">Only today&apos;s date is available. Contact an Administrator for back-date corrections.</span>}
         </Field>
         <Field>
           <FieldLabel htmlFor="dateTo">Date to (optional, defaults to same day)</FieldLabel>
-          <Input id="dateTo" name="dateTo" type="date" />
+          <Input id="dateTo" name="dateTo" type="date" max={isAdmin ? undefined : today} />
         </Field>
         <Field>
           <FieldLabel htmlFor="status">Status</FieldLabel>
