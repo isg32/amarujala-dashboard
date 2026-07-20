@@ -1,6 +1,6 @@
 import "server-only";
-import { asc, eq } from "drizzle-orm";
-import { requireAdmin, requireAppUser, type AppUser } from "@/lib/auth/session";
+import { and, asc, eq, inArray } from "drizzle-orm";
+import { requireAppUser, type AppUser } from "@/lib/auth/session";
 import { db } from "@/lib/db";
 import { attendance, attendanceBulkRuns, readers, centers, cities } from "@/lib/db/schema";
 import { assertCenterInScope } from "./readers";
@@ -80,18 +80,19 @@ export async function listAttendanceForReader(readerId: number) {
 
 export type BulkScope = "center" | "city" | "unit" | "org";
 
-async function resolveReaderIdsForScope(scope: BulkScope, scopeId: number | null): Promise<number[]> {
+async function resolveReaderIdsForScope(scope: BulkScope, scopeId: number | null, user?: AppUser): Promise<number[]> {
+  const centerFilter = user && user.role === "au_poc" ? inArray(readers.centerId, user.centerIds) : undefined;
   let query;
   switch (scope) {
     case "center":
-      query = db.select({ id: readers.id }).from(readers).where(eq(readers.centerId, scopeId!));
+      query = db.select({ id: readers.id }).from(readers).where(and(eq(readers.centerId, scopeId!), centerFilter));
       break;
     case "city":
       query = db
         .select({ id: readers.id })
         .from(readers)
         .innerJoin(centers, eq(readers.centerId, centers.id))
-        .where(eq(centers.cityId, scopeId!));
+        .where(and(eq(centers.cityId, scopeId!), centerFilter));
       break;
     case "unit":
       query = db
@@ -99,19 +100,20 @@ async function resolveReaderIdsForScope(scope: BulkScope, scopeId: number | null
         .from(readers)
         .innerJoin(centers, eq(readers.centerId, centers.id))
         .innerJoin(cities, eq(centers.cityId, cities.id))
-        .where(eq(cities.unitId, scopeId!));
+        .where(and(eq(cities.unitId, scopeId!), centerFilter));
       break;
     case "org":
-      query = db.select({ id: readers.id }).from(readers);
+      if (centerFilter) {
+        query = db.select({ id: readers.id }).from(readers).where(centerFilter);
+      } else {
+        query = db.select({ id: readers.id }).from(readers);
+      }
       break;
   }
   const rows = await query;
   return rows.map((r) => r.id);
 }
 
-// Bulk marking by Center/City/Unit/Org is an Administrator-only action per
-// the FRD ("Administrators should be able to mark delivery absence in
-// bulk") — AU POCs use markAttendanceForReader for their own readers.
 export async function bulkMarkAttendance(input: {
   scope: BulkScope;
   scopeId: number | null;
@@ -119,9 +121,18 @@ export async function bulkMarkAttendance(input: {
   dateTo: string;
   status: "delivered" | "not_delivered";
 }) {
-  const user = await requireAdmin();
+  const user = await requireAppUser();
+  if (user.role === "au_poc" && !user.permissions.canMarkAttendance) {
+    throw new Error("You don't have permission to mark attendance. Contact an Administrator.");
+  }
+  if (user.role === "au_poc" && input.scope === "org") {
+    throw new Error("You don't have permission to mark attendance for the entire organization.");
+  }
+  if (user.role === "au_poc" && input.scope === "center" && input.scopeId != null && !user.centerIds.includes(input.scopeId)) {
+    throw new Error("This center is outside your assigned Centers.");
+  }
 
-  const readerIds = await resolveReaderIdsForScope(input.scope, input.scopeId);
+  const readerIds = await resolveReaderIdsForScope(input.scope, input.scopeId, user);
   const dates = datesBetween(input.dateFrom, input.dateTo);
 
   if (readerIds.length > 0 && dates.length > 0) {

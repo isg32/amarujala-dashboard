@@ -19,7 +19,7 @@ import {
 const initialState: RecordPaymentState = null;
 const today = new Date().toISOString().slice(0, 10);
 
-export function RecordPaymentForm({ readerId, isAdmin = true }: { readerId: number; isAdmin?: boolean }) {
+export function RecordPaymentForm({ readerId, isAdmin = true, coupons }: { readerId: number; isAdmin?: boolean; coupons?: { id: number; code: string; discountAmount: string }[] }) {
   const [state, formAction, pending] = useActionState(recordPaymentAction, initialState);
   const [method, setMethod] = useState("cash");
 
@@ -68,6 +68,29 @@ export function RecordPaymentForm({ readerId, isAdmin = true }: { readerId: numb
           <Input id="paymentDate" name="paymentDate" type="date" defaultValue={today} max={isAdmin ? undefined : today} required />
           {!isAdmin && <span className="text-xs text-muted-foreground">Only today&apos;s date is available. Contact an Administrator for back-date corrections.</span>}
         </Field>
+        {coupons && coupons.length > 0 && (
+          <Field>
+            <FieldLabel htmlFor="couponId">Coupon / Voucher (optional)</FieldLabel>
+            <Select
+              name="couponId"
+              items={{ "": "None", ...Object.fromEntries(coupons.map((c) => [String(c.id), `${c.code} (₹${c.discountAmount})`])) }}
+            >
+              <SelectTrigger id="couponId" className="w-full">
+                <SelectValue placeholder="None" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectGroup>
+                  <SelectItem value="">None</SelectItem>
+                  {coupons.map((c) => (
+                    <SelectItem key={c.id} value={String(c.id)}>
+                      {c.code} (₹{c.discountAmount})
+                    </SelectItem>
+                  ))}
+                </SelectGroup>
+              </SelectContent>
+            </Select>
+          </Field>
+        )}
         <Field>
           <FieldLabel htmlFor="remarks">Remarks (optional)</FieldLabel>
           <Input id="remarks" name="remarks" />

@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { requireAppUser } from "@/lib/auth/session";
 import { listReaders, listAssignableCentersWithPocs } from "@/lib/data/readers";
 import { listPaymentTransactions } from "@/lib/data/payments";
@@ -174,7 +175,7 @@ async function ReportTable({
         <TableBody>
           {rows.map((r) => (
             <TableRow key={r.id}>
-              <TableCell>{r.name} <span className="text-xs text-muted-foreground">({r.readerCode})</span></TableCell>
+              <TableCell><Link href={`/readers/${r.id}`} className="hover:underline">{r.name}</Link> <span className="text-xs text-muted-foreground">({r.readerCode})</span></TableCell>
               <TableCell>{r.mobile}</TableCell>
               <TableCell>{r.cityName}</TableCell>
               <TableCell>{r.centerName}</TableCell>
@@ -203,7 +204,7 @@ async function ReportTable({
         <TableBody>
           {rows.map((r) => (
             <TableRow key={r.id}>
-              <TableCell>{r.name} <span className="text-xs text-muted-foreground">({r.readerCode})</span></TableCell>
+              <TableCell><Link href={`/readers/${r.id}`} className="hover:underline">{r.name}</Link> <span className="text-xs text-muted-foreground">({r.readerCode})</span></TableCell>
               <TableCell>{r.mobile}</TableCell>
               <TableCell>{r.cityName}</TableCell>
               <TableCell>{r.centerName}</TableCell>
@@ -233,7 +234,7 @@ async function ReportTable({
           {rows.map((t) => (
             <TableRow key={t.id}>
               <TableCell>{t.paymentDate}</TableCell>
-              <TableCell>{t.readerName}</TableCell>
+              <TableCell><Link href={`/readers/${t.readerId}`} className="hover:underline">{t.readerName}</Link></TableCell>
               <TableCell>{t.cityName}</TableCell>
               <TableCell>{t.centerName}</TableCell>
               <TableCell>{t.method}</TableCell>
@@ -260,7 +261,7 @@ async function ReportTable({
         <TableBody>
           {rows.map((r) => (
             <TableRow key={r.id}>
-              <TableCell>{r.name} <span className="text-xs text-muted-foreground">({r.readerCode})</span></TableCell>
+              <TableCell><Link href={`/readers/${r.id}`} className="hover:underline">{r.name}</Link> <span className="text-xs text-muted-foreground">({r.readerCode})</span></TableCell>
               <TableCell>{r.centerName}</TableCell>
               <TableCell>{r.delivered}</TableCell>
               <TableCell>{r.absent}</TableCell>

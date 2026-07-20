@@ -1,7 +1,10 @@
 import { requireAppUser } from "@/lib/auth/session";
-import { getReader } from "@/lib/data/readers";
+import { getReader, listAssignableCentersWithPocs } from "@/lib/data/readers";
 import { listAttendanceForReader } from "@/lib/data/attendance";
-import { listCenters, listCities, listUnits } from "@/lib/data/master-data";
+import { listCities, listUnits } from "@/lib/data/master-data";
+import { db } from "@/lib/db";
+import { centers, cities as citiesTable, units as unitsTable, zones } from "@/lib/db/schema";
+import { asc, eq, inArray } from "drizzle-orm";
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from "@/components/ui/card";
 import { AttendanceForm } from "./attendance-form";
 import { AttendanceCalendar } from "../readers/[id]/attendance-calendar";
@@ -35,8 +38,36 @@ export default async function AttendancePage({
   }
 
   const [centerRows, cityRows, unitRows] = isAdmin
-    ? await Promise.all([listCenters(), listCities(), listUnits()])
-    : [[], [], []];
+    ? await Promise.all([listAssignableCentersWithPocs(), listCities(), listUnits()])
+    : await (async () => {
+        const pocCenters = await listAssignableCentersWithPocs();
+        const centerCityIds = (
+          await db
+            .select({ cityId: citiesTable.id })
+            .from(citiesTable)
+            .innerJoin(centers, eq(centers.cityId, citiesTable.id))
+            .where(inArray(centers.id, user.centerIds))
+            .groupBy(citiesTable.id)
+        ).map((r) => r.cityId);
+        const pocCities = centerCityIds.length > 0
+          ? await db
+              .select({ id: citiesTable.id, name: citiesTable.name, unitId: citiesTable.unitId, unitName: unitsTable.name })
+              .from(citiesTable)
+              .innerJoin(unitsTable, eq(citiesTable.unitId, unitsTable.id))
+              .where(inArray(citiesTable.id, centerCityIds))
+              .orderBy(asc(citiesTable.name))
+          : [];
+        const pocUnitIds = [...new Set(pocCities.map((c) => c.unitId))];
+        const pocUnits = pocUnitIds.length > 0
+          ? await db
+              .select({ id: unitsTable.id, name: unitsTable.name, zoneName: zones.name })
+              .from(unitsTable)
+              .innerJoin(zones, eq(unitsTable.zoneId, zones.id))
+              .where(inArray(unitsTable.id, pocUnitIds))
+              .orderBy(asc(unitsTable.name))
+          : [];
+        return [pocCenters, pocCities, pocUnits];
+      })();
 
   const selectedReaderId = params.readerId ? Number(params.readerId) : undefined;
   const [selectedReader, calendarAttendance] = selectedReaderId

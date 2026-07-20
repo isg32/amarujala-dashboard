@@ -36,15 +36,13 @@ export function AttendanceForm({
   const [scope, setScope] = useState<string>("reader");
   const [readerId, setReaderId] = useState<number | null>(null);
 
-  const scopeOptions = isAdmin
-    ? [
-        { value: "reader", label: "Individual Reader" },
-        { value: "center", label: "Center" },
-        { value: "city", label: "City" },
-        { value: "unit", label: "Unit" },
-        { value: "org", label: "Entire Organization" },
-      ]
-    : [{ value: "reader", label: "Individual Reader" }];
+  const scopeOptions = [
+    { value: "reader", label: "Individual Reader" },
+    { value: "center", label: "Center" },
+    ...(isAdmin ? [{ value: "city", label: "City" }] : centerOptions.length > 0 ? [{ value: "city", label: "City" }] : []),
+    ...(isAdmin ? [{ value: "unit", label: "Unit" }] : unitOptions.length > 0 ? [{ value: "unit", label: "Unit" }] : []),
+    ...(isAdmin ? [{ value: "org", label: "Entire Organization" }] : []),
+  ];
 
   const targetOptions: Option[] =
     scope === "center" ? centerOptions : scope === "city" ? cityOptions : scope === "unit" ? unitOptions : [];

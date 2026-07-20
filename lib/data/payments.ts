@@ -28,11 +28,14 @@ export interface RecordPaymentInput {
   paymentDate: string;
   /** Manual methods only — see payments.inProcess in lib/db/schema.ts. */
   inProcess?: boolean;
+  /** Optional coupon to apply before recording the payment (admin-only). */
+  couponId?: number;
 }
 
 // Available to both roles (AU POCs can "Record payments" per the FRD),
 // center-scoped. Writes the payment row and the offsetting ledger entry
-// (negative — decreases what's owed) in one transaction.
+// (negative — decreases what's owed) in one transaction. If a coupon is
+// provided it is applied first (admin-only — POCs cannot apply coupons).
 export async function recordPayment(input: RecordPaymentInput) {
   const user = await requireAppUser();
   if (user.role === "au_poc" && !user.permissions.canRecordPayments) {
@@ -52,6 +55,11 @@ export async function recordPayment(input: RecordPaymentInput) {
         "Please contact an Administrator if a correction is needed."
       );
     }
+  }
+
+  if (input.couponId) {
+    // applyCoupon internally calls requireAdmin() — POCs cannot pass a coupon.
+    await applyCoupon(input.readerId, input.couponId, "Applied during payment recording");
   }
 
   return db.transaction(async (tx) => {
