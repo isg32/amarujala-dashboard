@@ -1,8 +1,8 @@
 import "server-only";
-import { and, count, eq, gte, inArray, lt, sql as sqlOp } from "drizzle-orm";
+import { and, count, eq, gte, inArray, lt, lte, desc, sql as sqlOp, sum } from "drizzle-orm";
 import { requireAppUser, type AppUser } from "@/lib/auth/session";
 import { db } from "@/lib/db";
-import { readers, centers, cities, appUsers, attendance, payments, readerBillingLedger } from "@/lib/db/schema";
+import { readers, centers, cities, units, appUsers, attendance, payments, readerBillingLedger, coupons, readerCoupons } from "@/lib/db/schema";
 
 function scopeCondition(user: AppUser) {
   if (user.role === "admin") return undefined;
@@ -276,4 +276,106 @@ export async function getMonthlySummaryReport(filters: ReportCenterFilter = {}) 
   return [...byMonth.entries()]
     .map(([month, totals]) => ({ month, ...totals }))
     .sort((a, b) => (a.month < b.month ? 1 : -1));
+}
+
+export async function getSupplyReport(filters: GroupedReportFilters = {}) {
+  const user = await requireAppUser();
+  const scope = scopeCondition(user);
+  const centerFilter = filters.centerId ? eq(readers.centerId, filters.centerId) : undefined;
+
+  const rows = await db
+    .select({
+      date: attendance.attendanceDate,
+      centerName: centers.name,
+      unitName: units.name,
+      pocName: appUsers.name,
+      delivered: sqlOp<number>`count(*) filter (where ${attendance.status} = 'delivered')`,
+      undelivered: sqlOp<number>`count(*) filter (where ${attendance.status} = 'not_delivered')`,
+    })
+    .from(attendance)
+    .innerJoin(readers, eq(attendance.readerId, readers.id))
+    .innerJoin(centers, eq(readers.centerId, centers.id))
+    .innerJoin(cities, eq(centers.cityId, cities.id))
+    .innerJoin(units, eq(cities.unitId, units.id))
+    .leftJoin(appUsers, eq(readers.assignedPocId, appUsers.id))
+    .where(
+      and(
+        scope,
+        centerFilter,
+        filters.dateFrom ? gte(attendance.attendanceDate, filters.dateFrom) : undefined,
+        filters.dateTo ? lte(attendance.attendanceDate, filters.dateTo) : undefined
+      )
+    )
+    .groupBy(attendance.attendanceDate, centers.name, units.name, appUsers.name)
+    .orderBy(desc(attendance.attendanceDate));
+  return rows;
+}
+
+export async function getCreditNoteReport(filters: GroupedReportFilters = {}) {
+  const user = await requireAppUser();
+  const scope = scopeCondition(user);
+  const centerFilter = filters.centerId ? eq(readers.centerId, filters.centerId) : undefined;
+
+  const rows = await db
+    .select({
+      date: readerBillingLedger.entryDate,
+      readerId: readers.id,
+      readerName: readers.name,
+      readerCode: readers.readerCode,
+      centerName: centers.name,
+      amount: readerBillingLedger.amount,
+      description: readerBillingLedger.description,
+      entryType: readerBillingLedger.entryType,
+    })
+    .from(readerBillingLedger)
+    .innerJoin(readers, eq(readerBillingLedger.readerId, readers.id))
+    .innerJoin(centers, eq(readers.centerId, centers.id))
+    .innerJoin(cities, eq(centers.cityId, cities.id))
+    .where(
+      and(
+        scope,
+        centerFilter,
+        sqlOp`${readerBillingLedger.amount} < 0`,
+        sqlOp`${readerBillingLedger.entryType} != 'payment'`,
+        filters.dateFrom ? gte(readerBillingLedger.entryDate, filters.dateFrom) : undefined,
+        filters.dateTo ? lte(readerBillingLedger.entryDate, filters.dateTo) : undefined
+      )
+    )
+    .orderBy(desc(readerBillingLedger.entryDate));
+  return rows;
+}
+
+export async function getCouponReport(filters: GroupedReportFilters = {}) {
+  const user = await requireAppUser();
+  const scope = scopeCondition(user);
+  const centerFilter = filters.centerId ? eq(readers.centerId, filters.centerId) : undefined;
+
+  const rows = await db
+    .select({
+      date: readerCoupons.appliedAt,
+      couponCode: coupons.code,
+      readerId: readers.id,
+      readerName: readers.name,
+      readerCode: readers.readerCode,
+      centerName: centers.name,
+      appliedAmount: readerCoupons.appliedAmount,
+      appliedByName: appUsers.name,
+      remarks: readerCoupons.remarks,
+    })
+    .from(readerCoupons)
+    .innerJoin(coupons, eq(readerCoupons.couponId, coupons.id))
+    .innerJoin(readers, eq(readerCoupons.readerId, readers.id))
+    .innerJoin(centers, eq(readers.centerId, centers.id))
+    .innerJoin(cities, eq(centers.cityId, cities.id))
+    .leftJoin(appUsers, eq(readerCoupons.appliedBy, appUsers.id))
+    .where(
+      and(
+        scope,
+        centerFilter,
+        filters.dateFrom ? sqlOp`${readerCoupons.appliedAt}::date >= ${filters.dateFrom}` : undefined,
+        filters.dateTo ? sqlOp`${readerCoupons.appliedAt}::date <= ${filters.dateTo}` : undefined
+      )
+    )
+    .orderBy(desc(readerCoupons.appliedAt));
+  return rows;
 }

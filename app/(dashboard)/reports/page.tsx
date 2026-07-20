@@ -2,7 +2,7 @@ import Link from "next/link";
 import { requireAppUser } from "@/lib/auth/session";
 import { listReaders, listAssignableCentersWithPocs } from "@/lib/data/readers";
 import { listPaymentTransactions } from "@/lib/data/payments";
-import { getPaymentDueReport, getAttendanceReport, getGroupedReport, getMonthlySummaryReport } from "@/lib/data/reports";
+import { getPaymentDueReport, getAttendanceReport, getGroupedReport, getMonthlySummaryReport, getSupplyReport, getCreditNoteReport, getCouponReport } from "@/lib/data/reports";
 import { formatAmountDue } from "@/lib/billing/format";
 import { Card, CardContent } from "@/components/ui/card";
 import { Table, TableHeader, TableRow, TableHead, TableBody, TableCell } from "@/components/ui/table";
@@ -26,6 +26,9 @@ const REPORT_TYPES = [
   { value: "center_wise", label: "Center-wise Report" },
   { value: "poc_wise", label: "POC-wise Report" },
   { value: "monthly_summary", label: "Monthly Summary" },
+  { value: "supply", label: "Supply Report" },
+  { value: "credit_note", label: "Credit Note Report" },
+  { value: "coupon_report", label: "Coupon Report" },
 ] as const;
 
 type ReportType = (typeof REPORT_TYPES)[number]["value"];
@@ -123,7 +126,10 @@ export default async function ReportsPage({
               type === "collection" ||
               type === "city_wise" ||
               type === "center_wise" ||
-              type === "poc_wise") && (
+              type === "poc_wise" ||
+              type === "supply" ||
+              type === "credit_note" ||
+              type === "coupon_report") && (
               <>
                 <div className="flex flex-col gap-1.5">
                   <label htmlFor="dateFrom" className="text-sm font-medium">From</label>
@@ -291,6 +297,96 @@ async function ReportTable({
               <TableCell>₹{r.charges.toFixed(2)}</TableCell>
               <TableCell>₹{r.payments.toFixed(2)}</TableCell>
               <TableCell>₹{r.discounts.toFixed(2)}</TableCell>
+            </TableRow>
+          ))}
+        </TableBody>
+      </ReportCard>
+    );
+  }
+
+  if (type === "supply") {
+    const rows = await getSupplyReport({ centerId, dateFrom, dateTo });
+    return (
+      <ReportCard>
+        <TableHeader>
+          <TableRow>
+            <TableHead>Date</TableHead>
+            <TableHead>Center</TableHead>
+            <TableHead>Unit</TableHead>
+            <TableHead>POC</TableHead>
+            <TableHead>Delivered</TableHead>
+            <TableHead>Undelivered</TableHead>
+          </TableRow>
+        </TableHeader>
+        <TableBody>
+          {rows.map((r, i) => (
+            <TableRow key={i}>
+              <TableCell>{r.date}</TableCell>
+              <TableCell>{r.centerName}</TableCell>
+              <TableCell>{r.unitName}</TableCell>
+              <TableCell>{r.pocName ?? "—"}</TableCell>
+              <TableCell>{r.delivered}</TableCell>
+              <TableCell>{r.undelivered}</TableCell>
+            </TableRow>
+          ))}
+        </TableBody>
+      </ReportCard>
+    );
+  }
+
+  if (type === "credit_note") {
+    const rows = await getCreditNoteReport({ centerId, dateFrom, dateTo });
+    return (
+      <ReportCard>
+        <TableHeader>
+          <TableRow>
+            <TableHead>Date</TableHead>
+            <TableHead>Reader</TableHead>
+            <TableHead>Center</TableHead>
+            <TableHead>Type</TableHead>
+            <TableHead>Amount</TableHead>
+            <TableHead>Description</TableHead>
+          </TableRow>
+        </TableHeader>
+        <TableBody>
+          {rows.map((r, i) => (
+            <TableRow key={i}>
+              <TableCell>{r.date}</TableCell>
+              <TableCell><Link href={`/readers/${r.readerId}`} className="hover:underline">{r.readerName}</Link></TableCell>
+              <TableCell>{r.centerName}</TableCell>
+              <TableCell>{r.entryType === "coupon_discount" ? "Coupon" : "Adjustment"}</TableCell>
+              <TableCell>₹{Number(r.amount).toFixed(2)}</TableCell>
+              <TableCell className="text-xs text-muted-foreground">{r.description ?? "—"}</TableCell>
+            </TableRow>
+          ))}
+        </TableBody>
+      </ReportCard>
+    );
+  }
+
+  if (type === "coupon_report") {
+    const rows = await getCouponReport({ centerId, dateFrom, dateTo });
+    return (
+      <ReportCard>
+        <TableHeader>
+          <TableRow>
+            <TableHead>Date</TableHead>
+            <TableHead>Coupon</TableHead>
+            <TableHead>Reader</TableHead>
+            <TableHead>Center</TableHead>
+            <TableHead>Amount</TableHead>
+            <TableHead>Applied By</TableHead>
+          </TableRow>
+        </TableHeader>
+        <TableBody>
+          {rows.map((r, i) => (
+            <TableRow key={i}>
+              <TableCell>{r.date.toISOString().slice(0, 10)}</TableCell>
+              <TableCell>{r.couponCode}</TableCell>
+              <TableCell><Link href={`/readers/${r.readerId}`} className="hover:underline">{r.readerName}</Link></TableCell>
+              <TableCell>{r.centerName}</TableCell>
+              <TableCell>₹{Number(r.appliedAmount).toFixed(2)}</TableCell>
+              <TableCell>{r.appliedByName ?? "—"}</TableCell>
             </TableRow>
           ))}
         </TableBody>

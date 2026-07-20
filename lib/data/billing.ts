@@ -118,11 +118,61 @@ async function getAttendanceMap(
   return Object.fromEntries(rows.map((r) => [r.attendanceDate, r.status]));
 }
 
+// Returns the day after the last posted monthly_charge for this reader, or
+// the subscriptionStartDate if no monthly_charge has ever been posted. Used
+// by both getAmountDue (for live computation across all unbilled cycles) and
+// closeSubscription (to know where the final charge should begin).
+async function getUnbilledPeriodStart(readerId: number, subscriptionStartDate: string): Promise<string> {
+  const [lastCharge] = await db
+    .select({ entryDate: readerBillingLedger.entryDate })
+    .from(readerBillingLedger)
+    .where(and(eq(readerBillingLedger.readerId, readerId), eq(readerBillingLedger.entryType, "monthly_charge")))
+    .orderBy(desc(readerBillingLedger.entryDate))
+    .limit(1);
+
+  if (!lastCharge) return subscriptionStartDate;
+  const d = new Date(lastCharge.entryDate + "T00:00:00Z");
+  d.setUTCDate(d.getUTCDate() + 1);
+  return d.toISOString().slice(0, 10);
+}
+
+// Sum of daily rates from the last posted monthly_charge date (or
+// subscription start) through today — the missing piece that makes
+// getAmountDue() correct across cycle boundaries without requiring a
+// periodic Close Month click. Includes the current cycle's unbilled days
+// just like the old getCurrentMonthProvisional did, but also every prior
+// cycle that was never materialised into the ledger.
+async function computeUnbilledCharge(
+  readerId: number,
+  context: { cityId: number; centerId: number; unitId: number; subscriptionStartDate: string }
+): Promise<number> {
+  const today = new Date().toISOString().slice(0, 10);
+  const periodStart = await getUnbilledPeriodStart(readerId, context.subscriptionStartDate);
+  if (periodStart > today) return 0;
+
+  const [pricingHistory, attendanceMap, overrides] = await Promise.all([
+    getCityPricingHistory(context.cityId),
+    getAttendanceMap(readerId, periodStart, today),
+    getPriceOverridesFor(context.centerId, context.unitId),
+  ]);
+
+  return calculateCycleCharge({
+    cycleStart: periodStart,
+    cycleEnd: today,
+    subscriptionStartDate: context.subscriptionStartDate,
+    attendance: attendanceMap,
+    pricingHistory,
+    today,
+    unmarkedDefault: unmarkedDefaultFor(periodStart),
+    ...overrides,
+  });
+}
+
 // Live, provisional total for the current (still open) billing period —
-// recomputed on every read, never written to the ledger. Only the
-// month-close / closeReaderCycle actions below write an immutable
-// monthly_charge entry. Readers with a custom billingAnchorDay get their
-// own [anchorDay .. anchorDay-1] cycle instead of the calendar month.
+// recomputed on every read, never written to the ledger. Only used for
+// SMS template rendering (the current-month {amount} tag); getAmountDue()
+// is the canonical "what do they owe" number since it includes every
+// unbilled cycle, not just the current one.
 export async function getCurrentMonthProvisional(readerId: number) {
   const user = await requireAppUser();
   const context = await getReaderBillingContext(readerId);
@@ -152,15 +202,22 @@ export async function getCurrentMonthProvisional(readerId: number) {
 }
 
 // The one number admin actually cares about: everything already posted to
-// the ledger (readers.outstanding_balance) plus today's live, never-posted
-// provisional charge — so it's always accurate without needing a Close Month
-// click. Negative means the reader is in credit (see reader-table.tsx /
-// reader-profile-card.tsx for the "Credit" display treatment).
+// the ledger (readers.outstanding_balance) plus every unbilled day since the
+// last posted monthly_charge (or subscription start if never billed) — so
+// it's always accurate without needing a Close Month click, even when
+// multiple billing cycles have passed without one. Negative means the reader
+// is in credit (see reader-table.tsx / reader-profile-card.tsx for the
+// "Credit" display treatment).
 export async function getAmountDue(readerId: number): Promise<number> {
-  const provisional = await getCurrentMonthProvisional(readerId); // does the scope check
+  const user = await requireAppUser();
+  const context = await getReaderBillingContext(readerId);
+  assertCenterInScope(user, context.centerId);
+
   const [row] = await db.select({ outstandingBalance: readers.outstandingBalance }).from(readers).where(eq(readers.id, readerId));
   if (!row) throw new Error("Reader not found.");
-  return Math.round((Number(row.outstandingBalance) + provisional.amount) * 100) / 100;
+
+  const unbilled = await computeUnbilledCharge(readerId, context);
+  return Math.round((Number(row.outstandingBalance) + unbilled) * 100) / 100;
 }
 
 // Shared by getCurrentMonthProvisional and closeSubscription: the currently
@@ -210,7 +267,7 @@ export interface CloseSubscriptionResult {
 // the sense that closing an already-inactive reader is rejected outright
 // rather than double-charging them.
 export async function closeSubscription(readerId: number): Promise<CloseSubscriptionResult> {
-  const user = await requireAdmin();
+  const user = await requireAppUser();
   const context = await getReaderBillingContext(readerId);
   if (context.status === "inactive") {
     throw new Error("This reader's subscription is already closed.");
@@ -218,19 +275,7 @@ export async function closeSubscription(readerId: number): Promise<CloseSubscrip
 
   const today = new Date().toISOString().slice(0, 10);
 
-  const [lastCharge] = await db
-    .select({ entryDate: readerBillingLedger.entryDate })
-    .from(readerBillingLedger)
-    .where(and(eq(readerBillingLedger.readerId, readerId), eq(readerBillingLedger.entryType, "monthly_charge")))
-    .orderBy(desc(readerBillingLedger.entryDate))
-    .limit(1);
-
-  let periodStart = context.subscriptionStartDate;
-  if (lastCharge) {
-    const d = new Date(lastCharge.entryDate + "T00:00:00Z");
-    d.setUTCDate(d.getUTCDate() + 1);
-    periodStart = d.toISOString().slice(0, 10);
-  }
+  let periodStart = await getUnbilledPeriodStart(readerId, context.subscriptionStartDate);
   if (periodStart > today) periodStart = today; // already fully billed through today; post a $0 close
 
   const billingPeriod = today.slice(0, 7);
@@ -331,14 +376,34 @@ export async function listReadersWithAmountDue(filters: ReaderAmountDueFilters =
   );
   const overrideRows = await db.select().from(pricingOverrides).where(eq(pricingOverrides.active, true));
 
-  const windowStart = new Date(today + "T00:00:00Z");
-  windowStart.setUTCDate(windowStart.getUTCDate() - 31);
-  const windowStartStr = windowStart.toISOString().slice(0, 10);
+  // Fetch last monthly_charge date for every reader to determine each
+  // reader's unbilled period start — the minimum across all readers sets
+  // the attendance window so past cycles are included, not just the
+  // current one.
   const readerIds = rows.map((r) => r.id);
+  const lastChargeRows = await db
+    .select({
+      readerId: readerBillingLedger.readerId,
+      entryDate: max(readerBillingLedger.entryDate),
+    })
+    .from(readerBillingLedger)
+    .where(and(inArray(readerBillingLedger.readerId, readerIds), eq(readerBillingLedger.entryType, "monthly_charge")))
+    .groupBy(readerBillingLedger.readerId);
+  const lastChargeByReader = new Map(lastChargeRows.map((r) => [r.readerId, r.entryDate]));
+
+  let globalWindowStart = today;
+  for (const r of rows) {
+    const lastCharge = lastChargeByReader.get(r.id);
+    const periodStart = lastCharge
+      ? new Date(new Date(lastCharge + "T00:00:00Z").getTime() + 86400000).toISOString().slice(0, 10)
+      : r.subscriptionStartDate;
+    if (periodStart < globalWindowStart) globalWindowStart = periodStart;
+  }
+
   const attendanceRows = await db
     .select({ readerId: attendance.readerId, attendanceDate: attendance.attendanceDate, status: attendance.status })
     .from(attendance)
-    .where(and(inArray(attendance.readerId, readerIds), gte(attendance.attendanceDate, windowStartStr), lte(attendance.attendanceDate, today)));
+    .where(and(inArray(attendance.readerId, readerIds), gte(attendance.attendanceDate, globalWindowStart), lte(attendance.attendanceDate, today)));
   const attendanceByReader = new Map<number, Record<string, AttendanceStatus>>();
   for (const a of attendanceRows) {
     if (!attendanceByReader.has(a.readerId)) attendanceByReader.set(a.readerId, {});
@@ -353,19 +418,22 @@ export async function listReadersWithAmountDue(filters: ReaderAmountDueFilters =
   const lastPaymentByReader = new Map(lastPayments.map((p) => [p.readerId, p.lastPaymentDate]));
 
   const allRows = rows.map((r) => {
-    const { cycleStart, cycleEnd } = currentCycleFor(r.billingAnchorDay, today);
+    const lastCharge = lastChargeByReader.get(r.id);
+    const periodStart = lastCharge
+      ? new Date(new Date(lastCharge + "T00:00:00Z").getTime() + 86400000).toISOString().slice(0, 10)
+      : r.subscriptionStartDate;
     const overrides = resolveOverridesForContext(overrideRows, r.centerId, r.unitId);
-    const provisional = calculateCycleCharge({
-      cycleStart,
-      cycleEnd,
+    const unbilled = calculateCycleCharge({
+      cycleStart: periodStart,
+      cycleEnd: today,
       subscriptionStartDate: r.subscriptionStartDate,
       attendance: attendanceByReader.get(r.id) ?? {},
       pricingHistory: pricingByCityId.get(r.cityId) ?? [],
       today,
-      unmarkedDefault: unmarkedDefaultFor(cycleStart),
+      unmarkedDefault: unmarkedDefaultFor(periodStart),
       ...overrides,
     });
-    const amountDue = Math.round((Number(r.outstandingBalance) + provisional) * 100) / 100;
+    const amountDue = Math.round((Number(r.outstandingBalance) + unbilled) * 100) / 100;
     return {
       readerId: r.id,
       readerName: r.readerName,

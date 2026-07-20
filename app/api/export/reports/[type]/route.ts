@@ -6,6 +6,9 @@ import {
   getAttendanceReport,
   getGroupedReport,
   getMonthlySummaryReport,
+  getSupplyReport,
+  getCreditNoteReport,
+  getCouponReport,
 } from "@/lib/data/reports";
 import { buildExportResponse } from "@/lib/export/to-excel";
 
@@ -99,6 +102,48 @@ export async function GET(request: Request, { params }: { params: Promise<{ type
         Charges: r.charges,
         "Payments Collected": r.payments,
         "Coupon Discounts": r.discounts,
+      }));
+      break;
+    }
+    case "supply": {
+      const dateFrom = searchParams.get("dateFrom") || new Date(new Date().getFullYear(), new Date().getMonth(), 1).toISOString().slice(0, 10);
+      const dateTo = searchParams.get("dateTo") || new Date().toISOString().slice(0, 10);
+      const data = await getSupplyReport({ centerId, dateFrom, dateTo });
+      rows = data.map((r) => ({
+        Date: r.date,
+        Center: r.centerName,
+        Unit: r.unitName,
+        POC: r.pocName ?? "—",
+        Delivered: r.delivered,
+        Undelivered: r.undelivered,
+      }));
+      break;
+    }
+    case "credit_note": {
+      const dateFrom = searchParams.get("dateFrom") || new Date(new Date().getFullYear(), new Date().getMonth(), 1).toISOString().slice(0, 10);
+      const dateTo = searchParams.get("dateTo") || new Date().toISOString().slice(0, 10);
+      const data = await getCreditNoteReport({ centerId, dateFrom, dateTo });
+      rows = data.map((r) => ({
+        Date: r.date,
+        Reader: r.readerName,
+        Center: r.centerName,
+        Type: r.entryType === "coupon_discount" ? "Coupon" : "Adjustment",
+        Amount: r.amount,
+        Description: r.description ?? "—",
+      }));
+      break;
+    }
+    case "coupon_report": {
+      const dateFrom = searchParams.get("dateFrom") || new Date(new Date().getFullYear(), new Date().getMonth(), 1).toISOString().slice(0, 10);
+      const dateTo = searchParams.get("dateTo") || new Date().toISOString().slice(0, 10);
+      const data = await getCouponReport({ centerId, dateFrom, dateTo });
+      rows = data.map((r) => ({
+        Date: r.date.toISOString().slice(0, 10),
+        Coupon: r.couponCode,
+        Reader: r.readerName,
+        Center: r.centerName,
+        Amount: r.appliedAmount,
+        "Applied By": r.appliedByName ?? "—",
       }));
       break;
     }

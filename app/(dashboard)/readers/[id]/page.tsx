@@ -54,7 +54,7 @@ export default async function ReaderProfilePage({
       listLedgerForReader(reader.id),
       listPaymentsForReader(reader.id),
       listCouponsForReader(reader.id),
-      isAdmin ? listCoupons() : Promise.resolve([]),
+      listCoupons(),
       listTransfersForReader(reader.id),
     ]);
   const amountDue = Math.round((Number(reader.outstandingBalance) + provisional.amount) * 100) / 100;
@@ -68,7 +68,7 @@ export default async function ReaderProfilePage({
         actions={
           <>
             {!currentUser?.suspended && <SendReminderButton readerId={reader.id} />}
-            {isAdmin && (
+            {!currentUser?.suspended && (
               <SendPaymentLinkButton
                 readerId={reader.id}
                 outstandingBalance={amountDue.toFixed(2)}
@@ -100,12 +100,10 @@ export default async function ReaderProfilePage({
             </span>
           </p>
         </CardHeader>
-        {isAdmin && (
-          <CardContent className="flex flex-wrap items-center justify-between gap-3 border-b pb-4 text-sm">
-            <BillingCycleForm readerId={reader.id} billingAnchorDay={reader.billingAnchorDay} />
-            {reader.status === "active" && <CloseSubscriptionButton readerId={reader.id} readerName={reader.name} />}
-          </CardContent>
-        )}
+        <CardContent className="flex flex-wrap items-center justify-between gap-3 border-b pb-4 text-sm">
+          {isAdmin && <BillingCycleForm readerId={reader.id} billingAnchorDay={reader.billingAnchorDay} />}
+          {reader.status === "active" && <CloseSubscriptionButton readerId={reader.id} readerName={reader.name} />}
+        </CardContent>
         <CardContent>
           {ledgerRows.length === 0 ? (
             <p className="text-sm text-muted-foreground">No billing history yet.</p>
@@ -137,7 +135,7 @@ export default async function ReaderProfilePage({
         </CardHeader>
         <CardContent className="flex flex-col gap-4">
           {(isAdmin || currentUser?.permissions.canRecordPayments) && (
-            <RecordPaymentForm readerId={reader.id} isAdmin={isAdmin} coupons={isAdmin ? availableCoupons : undefined} />
+            <RecordPaymentForm readerId={reader.id} isAdmin={isAdmin} coupons={availableCoupons.length > 0 ? availableCoupons : undefined} />
           )}
           {paymentRows.length > 0 && (
             <div className="flex flex-col gap-2 text-sm">
@@ -174,7 +172,7 @@ export default async function ReaderProfilePage({
           <CardTitle>Coupons</CardTitle>
         </CardHeader>
         <CardContent className="flex flex-col gap-4">
-          {isAdmin && <ApplyCouponForm readerId={reader.id} coupons={availableCoupons} />}
+          {<ApplyCouponForm readerId={reader.id} coupons={availableCoupons} />}
           {appliedCoupons.length > 0 && (
             <div className="flex flex-col gap-2 text-sm">
               {appliedCoupons.map((c) => (
@@ -191,7 +189,7 @@ export default async function ReaderProfilePage({
               ))}
             </div>
           )}
-          {appliedCoupons.length === 0 && !isAdmin && (
+          {appliedCoupons.length === 0 && (
             <p className="text-sm text-muted-foreground">No coupons applied yet.</p>
           )}
         </CardContent>

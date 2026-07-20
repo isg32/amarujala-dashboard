@@ -3,7 +3,7 @@
 import { z } from "zod";
 import { revalidatePath } from "next/cache";
 import { publicUrl } from "@/lib/public-url";
-import { requireAdmin } from "@/lib/auth/session";
+import { requireAdmin, requireAppUser } from "@/lib/auth/session";
 import { recordPayment, reversePayment, createPaymentLink, markPaymentIntentFailed } from "@/lib/data/payments";
 import { getReader } from "@/lib/data/readers";
 import { sendPaymentLinkSms, previewPaymentLinkMessage, isoToDMY } from "@/lib/sms/send-reminder";
@@ -92,7 +92,7 @@ export async function sendGeneratedPaymentLinkSmsAction(
   endDate?: string,
   testMobile?: string
 ): Promise<{ error: string } | { message: string }> {
-  await requireAdmin();
+  await requireAppUser();
   try {
     const reader = await getReader(readerId);
     if (!reader) throw new Error("Reader not found.");
@@ -119,7 +119,7 @@ export async function previewPaymentLinkMessageAction(
   startDate?: string,
   endDate?: string
 ): Promise<{ error: string } | { message: string }> {
-  await requireAdmin();
+  await requireAppUser();
   try {
     const reader = await getReader(readerId);
     if (!reader) throw new Error("Reader not found.");

@@ -123,7 +123,7 @@ export async function reversePayment(paymentId: number, reason?: string) {
   });
 }
 
-// Admin-only, gated by PAYU_GATEWAY_ENABLED — see lib/payu/config.ts for why.
+// Gated by PAYU_GATEWAY_ENABLED — see lib/payu/config.ts for why.
 // Creates a pending payment_intents row and returns the public /pay URL a
 // reader can open unauthenticated to complete a real PayU transaction. The
 // PayU webhook (markPaymentIntentResult) is what posts the ledger entry once
@@ -143,7 +143,7 @@ export async function createPaymentLink(
   readerId: number,
   options: { voucherCouponId?: number; amountOverride?: number } = {}
 ) {
-  const user = await requireAdmin();
+  const user = await requireAppUser();
   if (!PAYU_GATEWAY_ENABLED) {
     throw new Error("PayU payments are disabled. Set PAYU_GATEWAY_ENABLED=true after testing the flow to go live.");
   }

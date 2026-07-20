@@ -11,7 +11,7 @@ import { postLedgerEntry } from "@/lib/billing/ledger";
 // coupon that's used up shouldn't be selectable at all, not just rejected
 // after the fact — listAllCoupons() below still shows it for management.
 export async function listCoupons() {
-  await requireAdmin();
+  await requireAppUser();
   const activeCoupons = await db.select().from(coupons).where(eq(coupons.active, true)).orderBy(asc(coupons.code));
 
   const budgeted = activeCoupons.filter((c) => c.totalBudget != null);
@@ -105,9 +105,8 @@ export async function listCouponsForReader(readerId: number) {
     .orderBy(desc(readerCoupons.appliedAt));
 }
 
-// Coupon management (create/assign/apply) is Administrator-only per the FRD.
 export async function applyCoupon(readerId: number, couponId: number, remarks?: string) {
-  const user = await requireAdmin();
+  const user = await requireAppUser();
 
   const [coupon] = await db.select().from(coupons).where(eq(coupons.id, couponId));
   if (!coupon || !coupon.active) throw new Error("Coupon not found or inactive.");

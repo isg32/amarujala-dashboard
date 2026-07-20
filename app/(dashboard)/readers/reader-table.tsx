@@ -109,19 +109,19 @@ export function ReaderTable({ readers, isAdmin, centers = [] }: { readers: Reade
 
   return (
     <div className="flex flex-col gap-3">
-      {isAdmin && (
-        <div className="flex flex-wrap items-center gap-2">
-          <Button variant="outline" size="sm" render={<Link href="/attendance" prefetch={false} />} nativeButton={false}>
-            Mark Attendance
-          </Button>
-          <Button
-            variant="outline"
-            size="sm"
-            disabled={selected.size === 0 || pending}
-            onClick={runBulkPaymentLinks}
-          >
-            Send Payment Links{selected.size > 0 ? ` (${selected.size})` : ""}
-          </Button>
+      <div className="flex flex-wrap items-center gap-2">
+        <Button variant="outline" size="sm" render={<Link href="/attendance" prefetch={false} />} nativeButton={false}>
+          Mark Attendance
+        </Button>
+        <Button
+          variant="outline"
+          size="sm"
+          disabled={selected.size === 0 || pending}
+          onClick={runBulkPaymentLinks}
+        >
+          Send Payment Links{selected.size > 0 ? ` (${selected.size})` : ""}
+        </Button>
+        {isAdmin && (
           <Button
             variant="outline"
             size="sm"
@@ -130,9 +130,9 @@ export function ReaderTable({ readers, isAdmin, centers = [] }: { readers: Reade
           >
             Delete Readers{selected.size > 0 ? ` (${selected.size})` : ""}
           </Button>
-          {notice && <span className="text-xs text-muted-foreground">{notice}</span>}
-        </div>
-      )}
+        )}
+        {notice && <span className="text-xs text-muted-foreground">{notice}</span>}
+      </div>
 
       {isAdmin && selected.size > 0 && (
         <div className="flex flex-wrap items-center gap-2 rounded-md border p-2">
@@ -192,11 +192,9 @@ export function ReaderTable({ readers, isAdmin, centers = [] }: { readers: Reade
       <Table>
         <TableHeader>
           <TableRow>
-            {isAdmin && (
-              <TableHead className="w-8">
-                <Checkbox checked={allSelected} onCheckedChange={toggleAll} aria-label="Select all" />
-              </TableHead>
-            )}
+            <TableHead className="w-8">
+              <Checkbox checked={allSelected} onCheckedChange={toggleAll} aria-label="Select all" />
+            </TableHead>
             <TableHead>Reader</TableHead>
             <TableHead>Mobile</TableHead>
             <TableHead>City</TableHead>
@@ -210,15 +208,13 @@ export function ReaderTable({ readers, isAdmin, centers = [] }: { readers: Reade
         <TableBody>
           {readers.map((reader) => (
             <TableRow key={reader.id}>
-              {isAdmin && (
-                <TableCell>
-                  <Checkbox
-                    checked={selected.has(reader.id)}
-                    onCheckedChange={() => toggleOne(reader.id)}
-                    aria-label={`Select ${reader.name}`}
-                  />
-                </TableCell>
-              )}
+              <TableCell>
+                <Checkbox
+                  checked={selected.has(reader.id)}
+                  onCheckedChange={() => toggleOne(reader.id)}
+                  aria-label={`Select ${reader.name}`}
+                />
+              </TableCell>
               <TableCell>
                 <Link href={`/readers/${reader.id}`} prefetch={false} className="hover:underline">
                   {reader.name}
@@ -238,7 +234,7 @@ export function ReaderTable({ readers, isAdmin, centers = [] }: { readers: Reade
           ))}
           {readers.length === 0 && (
             <TableRow>
-              <TableCell colSpan={isAdmin ? 9 : 8} className="text-center text-muted-foreground">
+              <TableCell colSpan={9} className="text-center text-muted-foreground">
                 No readers found.
               </TableCell>
             </TableRow>
