@@ -3,7 +3,7 @@ import { notFound } from "next/navigation";
 import { getCurrentAppUser } from "@/lib/auth/session";
 import { getReader, listTransfersForReader } from "@/lib/data/readers";
 import { listAttendanceForReader } from "@/lib/data/attendance";
-import { getCurrentMonthProvisional, listLedgerForReader } from "@/lib/data/billing";
+import { getAmountDue, getCurrentMonthProvisional, listLedgerForReader } from "@/lib/data/billing";
 import { listPaymentsForReader } from "@/lib/data/payments";
 import { listCoupons, listCouponsForReader } from "@/lib/data/coupons";
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
@@ -47,17 +47,17 @@ export default async function ReaderProfilePage({
   const currentUser = await getCurrentAppUser();
   const isAdmin = currentUser?.role === "admin";
 
-  const [attendanceRows, provisional, ledgerRows, paymentRows, appliedCoupons, availableCoupons, transfers] =
+  const [attendanceRows, provisional, amountDue, ledgerRows, paymentRows, appliedCoupons, availableCoupons, transfers] =
     await Promise.all([
       listAttendanceForReader(reader.id),
       getCurrentMonthProvisional(reader.id),
+      getAmountDue(reader.id),
       listLedgerForReader(reader.id),
       listPaymentsForReader(reader.id),
       listCouponsForReader(reader.id),
       listCoupons(),
       listTransfersForReader(reader.id),
     ]);
-  const amountDue = Math.round((Number(reader.outstandingBalance) + provisional.amount) * 100) / 100;
 
   return (
     <div className="flex flex-col gap-6 overflow-x-auto">
