@@ -42,7 +42,7 @@ export function EditReaderForm({ reader, onDone }: { reader: Reader; onDone: () 
       className="flex flex-col gap-3"
     >
       <FieldGroup>
-        <div className="grid grid-cols-2 gap-3">
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
           <Field>
             <FieldLabel htmlFor="edit-name">Name</FieldLabel>
             <Input id="edit-name" name="name" defaultValue={reader.name} required />

@@ -104,8 +104,8 @@ export function SendPaymentLinkButton({
         )}
         <Popover>
           <PopoverTrigger render={<Button type="button" variant="ghost" size="xs" />}>Customize</PopoverTrigger>
-          <PopoverContent className="flex w-80 flex-col gap-2 text-xs" align="end">
-            <div className="flex items-center gap-2">
+          <PopoverContent className="flex w-80 max-w-[calc(100vw-2rem)] flex-col gap-2 text-xs" align="end">
+      <div className="flex flex-wrap items-center gap-2">
               <div className="flex flex-col gap-1">
                 <label className="text-muted-foreground" htmlFor={`startDate-${readerId}`}>
                   Bill period start

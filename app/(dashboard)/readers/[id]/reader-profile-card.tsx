@@ -44,7 +44,7 @@ export function ReaderProfileCard({
 
   return (
     <Card>
-      <CardHeader className="flex items-start justify-between">
+      <CardHeader className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
         <div>
           <CardTitle className="flex items-center gap-2">
             {reader.name}
@@ -52,7 +52,7 @@ export function ReaderProfileCard({
           </CardTitle>
           <p className="text-sm text-muted-foreground">{reader.readerCode}</p>
         </div>
-        <div className="flex gap-2">
+        <div className="flex flex-wrap gap-2">
           {actions}
           {isAdmin && !editing && (
             <Button variant="outline" size="sm" onClick={() => setEditing(true)}>
@@ -67,7 +67,7 @@ export function ReaderProfileCard({
           <EditReaderForm reader={reader} onDone={() => setEditing(false)} />
         </CardContent>
       ) : (
-        <CardContent className="grid grid-cols-2 gap-x-6 gap-y-3 text-sm">
+        <CardContent className="grid grid-cols-1 gap-x-6 gap-y-3 text-sm sm:grid-cols-2">
           <div>
             <div className="text-muted-foreground">Mobile</div>
             <div>{reader.mobile}</div>
