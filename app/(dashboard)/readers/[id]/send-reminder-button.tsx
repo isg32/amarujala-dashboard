@@ -9,7 +9,7 @@ export function SendReminderButton({ readerId }: { readerId: number }) {
   const [result, setResult] = useState<{ error: string } | { message: string } | null>(null);
 
   return (
-    <div className="flex flex-col items-end gap-1">
+    <div className="flex flex-col gap-1 sm:items-end">
       <Button
         type="button"
         variant="outline"

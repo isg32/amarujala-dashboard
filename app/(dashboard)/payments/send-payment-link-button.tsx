@@ -57,8 +57,8 @@ export function SendPaymentLinkButton({
   }
 
   return (
-    <div className="flex flex-col items-end gap-1">
-      <div className="flex items-center gap-2">
+    <div className="flex flex-col gap-2 sm:items-end">
+      <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:flex-wrap">
         <Input
           type="number"
           step="0.01"
@@ -68,7 +68,7 @@ export function SendPaymentLinkButton({
             setAmount(e.target.value);
             invalidateGeneratedLink();
           }}
-          className="w-24"
+          className="w-full sm:w-24"
           aria-label="Payment link amount"
         />
         {coupons.length > 0 && (
@@ -87,7 +87,7 @@ export function SendPaymentLinkButton({
               ...Object.fromEntries(coupons.map((c) => [String(c.id), `${c.code} (-₹${c.discountAmount})`])),
             }}
           >
-            <SelectTrigger size="sm" className="w-36">
+            <SelectTrigger size="sm" className="w-full sm:w-36">
               <SelectValue placeholder="No voucher" />
             </SelectTrigger>
             <SelectContent>
@@ -232,10 +232,10 @@ export function SendPaymentLinkButton({
         )}
       </div>
 
-      {generateError && <span className="max-w-56 text-right text-xs text-destructive">{generateError}</span>}
+      {generateError && <span className="max-w-56 text-right text-xs text-destructive max-sm:text-left">{generateError}</span>}
 
       {generatedLink && (
-        <div className="flex max-w-80 flex-col gap-1 rounded-md border p-2 text-right text-xs">
+        <div className="flex max-w-80 flex-col gap-1 rounded-md border p-2 text-right text-xs max-sm:max-w-full">
           <span className="text-muted-foreground">Real link generated — review before sending:</span>
           <div className="flex items-center justify-end gap-2">
             <a href={generatedLink.payUrl} target="_blank" rel="noreferrer" className="break-all underline">
@@ -258,7 +258,7 @@ export function SendPaymentLinkButton({
         </div>
       )}
 
-      {result && "error" in result && <span className="max-w-56 text-right text-xs text-destructive">{result.error}</span>}
+      {result && "error" in result && <span className="max-w-56 text-right text-xs text-destructive max-sm:text-left">{result.error}</span>}
       {result && "message" in result && <span className="text-xs text-muted-foreground">{result.message}</span>}
     </div>
   );
