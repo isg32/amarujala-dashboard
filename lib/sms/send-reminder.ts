@@ -21,6 +21,7 @@ const ENTITY_ID = "1701158080315505109";
 const TEMPLATE_META = {
   reminder: { contentId: "1707177821506648204" },
   payment_link: { contentId: "1707178281136561332" },
+  payment_confirmation: { contentId: "PENDING_DLT_REGISTRATION" },
 } as const;
 
 export type SmsTemplateType = keyof typeof TEMPLATE_META;
@@ -33,6 +34,7 @@ export type SmsTemplateType = keyof typeof TEMPLATE_META;
 export const DEFAULT_TEMPLATES: Record<SmsTemplateType, string> = {
   reminder: "REMINDER! {name} Month {month} Bill due {amount} and Total due {total} Due by {dueDate} - AMAR UJALA",
   payment_link: "{name}, your bill of Rs.{amount} for {startDate} to {endDate} is due. Pay: {payUrl} - Amar Ujala",
+  payment_confirmation: "Thank you {name}! Payment of Rs.{amount} received on {date}. Ref: {ref} - Amar Ujala",
 };
 
 function renderTemplate(template: string, vars: Record<string, string>): string {
@@ -199,6 +201,22 @@ export async function sendPaymentLinkSms(
 ): Promise<SendSmsResult> {
   const variables = buildPaymentLinkVariables(reader, payUrl, options);
   return sendSms(options?.testMobile || reader.mobile, "payment_link", variables);
+}
+
+export async function sendPaymentConfirmationSms(
+  reader: { name: string; mobile: string },
+  amount: string,
+  ref: string,
+  paymentDate: string
+): Promise<SendSmsResult> {
+  const [y, m, d] = paymentDate.split("-");
+  const formattedDate = `${d}-${m}-${y}`;
+  return sendSms(reader.mobile, "payment_confirmation", {
+    name: reader.name,
+    amount,
+    date: formattedDate,
+    ref,
+  });
 }
 
 // Diagnostics page support: preview/send for a made-up test customer,

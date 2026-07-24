@@ -5,7 +5,7 @@ import { revalidatePath } from "next/cache";
 import { updateSmsTemplate, resetSmsTemplate } from "@/lib/data/sms-templates";
 import type { SmsTemplateType } from "@/lib/sms/send-reminder";
 
-const typeSchema = z.enum(["reminder", "payment_link"]);
+const typeSchema = z.enum(["reminder", "payment_link", "payment_confirmation"]);
 
 export async function updateSmsTemplateAction(formData: FormData): Promise<{ error: string } | void> {
   const type = typeSchema.parse(formData.get("type")) as SmsTemplateType;

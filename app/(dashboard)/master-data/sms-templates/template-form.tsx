@@ -19,6 +19,7 @@ type Template = {
 const TITLES: Record<SmsTemplateType, string> = {
   reminder: "Payment Reminder",
   payment_link: "Payment Link",
+  payment_confirmation: "Payment Confirmation",
 };
 
 function extractTags(template: string): string[] {
