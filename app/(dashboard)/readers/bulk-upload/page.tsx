@@ -1,9 +1,8 @@
+import Link from "next/link";
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
 import { BulkUploadForm } from "./bulk-upload-form";
 
-// Large spreadsheets can take a while to validate + insert; raise the
-// Server Action timeout above the platform default (60s is the max on
-// Vercel's Hobby plan, raise further on Pro).
 export const maxDuration = 60;
 
 export default function BulkUploadPage() {
@@ -12,9 +11,17 @@ export default function BulkUploadPage() {
       <CardHeader>
         <CardTitle>Bulk Reader Upload</CardTitle>
         <CardDescription>
-          Columns: Reader Name, Mobile Number, Complete Address, City, Center, Subscription Start
-          Date (required); Email, Landmark, Remarks (optional).
+          Upload an Excel (.xlsx) or CSV file with these columns:
         </CardDescription>
+        <ul className="list-inside list-disc text-sm text-muted-foreground">
+          <li><strong>Required:</strong> Reader Name, Mobile Number (10 digits), Complete Address, City, Center, Subscription Start Date (YYYY-MM-DD)</li>
+          <li><strong>Optional:</strong> Email, Landmark, POC (must match a POC assigned to that Center), Remarks</li>
+        </ul>
+        <div className="mt-2">
+          <Button variant="outline" size="sm" render={<Link href="/api/sample-bulk-csv" prefetch={false} />} nativeButton={false}>
+            Download Sample CSV
+          </Button>
+        </div>
       </CardHeader>
       <CardContent>
         <BulkUploadForm />
