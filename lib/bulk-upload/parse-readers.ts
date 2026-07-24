@@ -15,6 +15,8 @@ const HEADER_ALIASES: Record<string, keyof ReaderBulkRow> = {
   city: "city",
   center: "center",
   centre: "center",
+  poc: "poc",
+  pocname: "poc",
   subscriptionstartdate: "subscriptionStartDate",
   remarks: "remarks",
 };
@@ -36,7 +38,7 @@ export type ParsedReaderRow =
   | { row: number; raw: Record<string, unknown>; error: string };
 
 export function parseReadersFile(buffer: Buffer): ParsedReaderRow[] {
-  const workbook = XLSX.read(buffer, { type: "buffer" });
+  const workbook = XLSX.read(buffer, { type: "buffer", cellDates: true });
   const sheet = workbook.Sheets[workbook.SheetNames[0]];
   const rawRows: Record<string, unknown>[] = XLSX.utils.sheet_to_json(sheet, { defval: "" });
 

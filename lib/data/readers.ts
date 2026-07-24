@@ -261,7 +261,7 @@ export async function bulkCreateReaders(parsedRows: ParsedReaderRow[]): Promise<
   const availableCenters = await listAssignableCentersWithPocs();
 
   const errors: { row: number; reason: string }[] = [];
-  const candidates: { row: number; centerId: number; data: Extract<ParsedReaderRow, { data: unknown }>["data"] }[] = [];
+  const candidates: { row: number; centerId: number; assignedPocId?: string; data: Extract<ParsedReaderRow, { data: unknown }>["data"] }[] = [];
   const seenMobiles = new Set<string>();
 
   for (const parsed of parsedRows) {
@@ -282,7 +282,10 @@ export async function bulkCreateReaders(parsedRows: ParsedReaderRow[]): Promise<
       continue;
     }
     seenMobiles.add(data.mobile);
-    candidates.push({ row: parsed.row, centerId: center.id, data });
+    const assignedPocId = data.poc
+      ? center.pocs.find((p) => p.name.toLowerCase() === data.poc!.toLowerCase())?.id
+      : undefined;
+    candidates.push({ row: parsed.row, centerId: center.id, assignedPocId, data });
   }
 
   if (candidates.length > 0) {
@@ -309,6 +312,7 @@ export async function bulkCreateReaders(parsedRows: ParsedReaderRow[]): Promise<
           address: candidate.data.address,
           landmark: candidate.data.landmark,
           centerId: candidate.centerId,
+          assignedPocId: candidate.assignedPocId,
           subscriptionStartDate: candidate.data.subscriptionStartDate,
           remarks: candidate.data.remarks,
         });
@@ -397,11 +401,10 @@ export async function bulkDeleteReaders(readerIds: number[]): Promise<{ deleted:
 
 // Admin-only. Editable fields for an existing reader — deliberately excludes
 // centerId (goes through transferReader/bulkTransferReaders instead, so
-// every Center change stays logged to reader_transfers) and subscription
-// start date (billing-relevant, not a plain profile detail).
+// every Center change stays logged to reader_transfers).
 export async function updateReader(
   readerId: number,
-  input: { name: string; mobile: string; email?: string; address: string; landmark?: string; status: "active" | "inactive" }
+  input: { name: string; mobile: string; email?: string; address: string; landmark?: string; subscriptionStartDate: string; status: "active" | "inactive" }
 ) {
   await requireAdmin();
   const [reader] = await db.select({ id: readers.id }).from(readers).where(eq(readers.id, readerId));
@@ -415,6 +418,7 @@ export async function updateReader(
         email: input.email ?? null,
         address: input.address,
         landmark: input.landmark ?? null,
+        subscriptionStartDate: input.subscriptionStartDate,
         status: input.status,
       })
       .where(eq(readers.id, readerId));

@@ -15,6 +15,7 @@ type Reader = {
   email: string | null;
   address: string;
   landmark: string | null;
+  subscriptionStartDate: string;
   status: "active" | "inactive";
 };
 
@@ -58,6 +59,10 @@ export function EditReaderForm({ reader, onDone }: { reader: Reader; onDone: () 
           <Field>
             <FieldLabel htmlFor="edit-landmark">Landmark</FieldLabel>
             <Input id="edit-landmark" name="landmark" defaultValue={reader.landmark ?? ""} />
+          </Field>
+          <Field>
+            <FieldLabel htmlFor="edit-subscriptionStartDate">Subscription Start Date</FieldLabel>
+            <Input id="edit-subscriptionStartDate" name="subscriptionStartDate" type="date" defaultValue={reader.subscriptionStartDate} required />
           </Field>
         </div>
         <Field>

@@ -70,6 +70,7 @@ export async function updateReaderAction(readerId: number, formData: FormData): 
     email: formData.get("email") ?? "",
     address: formData.get("address") ?? "",
     landmark: formData.get("landmark") ?? "",
+    subscriptionStartDate: formData.get("subscriptionStartDate") ?? "",
     status: formData.get("status") ?? "active",
   });
   try {

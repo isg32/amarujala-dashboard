@@ -16,6 +16,7 @@ export const readerEditSchema = z.object({
   email,
   address,
   landmark,
+  subscriptionStartDate,
   status: z.enum(["active", "inactive"]),
 });
 export type ReaderEditInput = z.infer<typeof readerEditSchema>;
@@ -44,6 +45,7 @@ export const readerBulkRowSchema = z.object({
   landmark,
   city: z.string().trim().min(1, "City is required"),
   center: z.string().trim().min(1, "Center is required"),
+  poc: z.string().trim().optional().or(z.literal("")).transform((v) => v || undefined),
   subscriptionStartDate,
   remarks,
 });
