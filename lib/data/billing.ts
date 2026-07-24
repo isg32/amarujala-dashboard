@@ -233,10 +233,14 @@ function currentCycleFor(anchorDay: number | null, referenceDate: string) {
   return { cycleStart, cycleEnd, billingPeriod: cycleStart.slice(0, 7) };
 }
 
-export async function listLedgerForReader(readerId: number) {
+export async function listLedgerForReader(readerId: number, dateFrom?: string, dateTo?: string) {
   const user = await requireAppUser();
   const context = await getReaderBillingContext(readerId);
   assertCenterInScope(user, context.centerId);
+
+  const conditions = [eq(readerBillingLedger.readerId, readerId)];
+  if (dateFrom) conditions.push(gte(readerBillingLedger.entryDate, dateFrom));
+  if (dateTo) conditions.push(lte(readerBillingLedger.entryDate, dateTo));
 
   return db
     .select({
@@ -249,8 +253,71 @@ export async function listLedgerForReader(readerId: number) {
       createdAt: readerBillingLedger.createdAt,
     })
     .from(readerBillingLedger)
-    .where(eq(readerBillingLedger.readerId, readerId))
+    .where(and(...conditions))
     .orderBy(readerBillingLedger.createdAt);
+}
+
+export async function getBillingBreakdown(readerId: number) {
+  const user = await requireAppUser();
+  const context = await getReaderBillingContext(readerId);
+  assertCenterInScope(user, context.centerId);
+
+  const today = new Date().toISOString().slice(0, 10);
+  const { cycleStart, cycleEnd, billingPeriod } = currentCycleFor(context.billingAnchorDay, today);
+
+  const [pricingHistory, attendanceMap, overrides] = await Promise.all([
+    getCityPricingHistory(context.cityId),
+    getAttendanceMap(readerId, cycleStart, today),
+    getPriceOverridesFor(context.centerId, context.unitId),
+  ]);
+
+  const currentMonthUnbilled = calculateCycleCharge({
+    cycleStart,
+    cycleEnd,
+    subscriptionStartDate: context.subscriptionStartDate,
+    attendance: attendanceMap,
+    pricingHistory,
+    today,
+    unmarkedDefault: unmarkedDefaultFor(cycleStart),
+    ...overrides,
+  });
+
+  const ledgerRows = await db
+    .select({
+      entryType: readerBillingLedger.entryType,
+      amount: readerBillingLedger.amount,
+      billingPeriod: readerBillingLedger.billingPeriod,
+    })
+    .from(readerBillingLedger)
+    .where(eq(readerBillingLedger.readerId, readerId));
+
+  const periodMap = new Map<string, number>();
+  for (const row of ledgerRows) {
+    const period = row.billingPeriod ?? "uncategorized";
+    periodMap.set(period, (periodMap.get(period) ?? 0) + Number(row.amount));
+  }
+
+  const byPeriod: { billingPeriod: string; amount: number }[] = [];
+  let previousOutstanding = 0;
+
+  for (const [period, amount] of periodMap) {
+    byPeriod.push({ billingPeriod: period === "uncategorized" ? "" : period, amount: Math.round(amount * 100) / 100 });
+    if (period !== billingPeriod) {
+      previousOutstanding += amount;
+    }
+  }
+
+  byPeriod.sort((a, b) => b.billingPeriod.localeCompare(a.billingPeriod));
+
+  const isClosedCurrentMonth = context.status === "inactive" &&
+    ledgerRows.some((r) => r.billingPeriod === billingPeriod && r.entryType === "monthly_charge");
+
+  return {
+    previousOutstanding: Math.round(previousOutstanding * 100) / 100,
+    currentMonthUnbilled: isClosedCurrentMonth ? 0 : currentMonthUnbilled,
+    isClosedCurrentMonth,
+    byPeriod,
+  };
 }
 
 export interface CloseSubscriptionResult {

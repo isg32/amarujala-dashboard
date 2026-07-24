@@ -3,7 +3,7 @@ import { notFound } from "next/navigation";
 import { getCurrentAppUser } from "@/lib/auth/session";
 import { getReader, listTransfersForReader } from "@/lib/data/readers";
 import { listAttendanceForReader } from "@/lib/data/attendance";
-import { getAmountDue, getCurrentMonthProvisional, listLedgerForReader } from "@/lib/data/billing";
+import { getAmountDue, getBillingBreakdown, listLedgerForReader } from "@/lib/data/billing";
 import { listPaymentsForReader } from "@/lib/data/payments";
 import { listCoupons, listCouponsForReader } from "@/lib/data/coupons";
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
@@ -18,6 +18,7 @@ import { BillingCycleForm } from "./billing-cycle-form";
 import { CloseSubscriptionButton } from "./close-subscription-button";
 import { ReaderProfileCard } from "./reader-profile-card";
 import { formatAmountDue } from "@/lib/billing/format";
+import { LedgerDateFilter } from "./ledger-date-filter";
 
 const LEDGER_LABELS: Record<string, string> = {
   monthly_charge: "Monthly Charge",
@@ -37,22 +38,25 @@ const METHOD_LABELS: Record<string, string> = {
 
 export default async function ReaderProfilePage({
   params,
+  searchParams,
 }: {
   params: Promise<{ id: string }>;
+  searchParams: Promise<{ dateFrom?: string; dateTo?: string }>;
 }) {
   const { id } = await params;
+  const { dateFrom, dateTo } = await searchParams;
   const reader = await getReader(Number(id));
   if (!reader) notFound();
 
   const currentUser = await getCurrentAppUser();
   const isAdmin = currentUser?.role === "admin";
 
-  const [attendanceRows, provisional, amountDue, ledgerRows, paymentRows, appliedCoupons, availableCoupons, transfers] =
+  const [attendanceRows, billingBreakdown, amountDue, ledgerRows, paymentRows, appliedCoupons, availableCoupons, transfers] =
     await Promise.all([
       listAttendanceForReader(reader.id),
-      getCurrentMonthProvisional(reader.id),
+      getBillingBreakdown(reader.id),
       getAmountDue(reader.id),
-      listLedgerForReader(reader.id),
+      listLedgerForReader(reader.id, dateFrom, dateTo),
       listPaymentsForReader(reader.id),
       listCouponsForReader(reader.id),
       listCoupons(),
@@ -93,10 +97,20 @@ export default async function ReaderProfilePage({
         <CardHeader>
           <CardTitle>Billing</CardTitle>
           <p className="text-sm text-muted-foreground">
-            Amount Due (live, updates automatically — no Close Month needed): {formatAmountDue(amountDue)}
+            Previous periods outstanding: <strong>{formatAmountDue(billingBreakdown.previousOutstanding)}</strong>
+            {billingBreakdown.isClosedCurrentMonth ? (
+              <span className="ml-2 text-xs text-destructive">(Subscription closed this month)</span>
+            ) : billingBreakdown.currentMonthUnbilled > 0 ? (
+              <>
+                <br />
+                <span className="text-xs">
+                  Current month unbilled: ₹{billingBreakdown.currentMonthUnbilled.toFixed(2)}
+                </span>
+              </>
+            ) : null}
             <br />
-            <span className="text-xs">
-              Current cycle ({provisional.cycleStart} – {provisional.cycleEnd}, unbilled): ₹{provisional.amount.toFixed(2)}
+            <span className="text-xs text-muted-foreground">
+              Total (incl. unbilled): {formatAmountDue(amountDue)}
             </span>
           </p>
         </CardHeader>
@@ -105,6 +119,20 @@ export default async function ReaderProfilePage({
           {reader.status === "active" && <CloseSubscriptionButton readerId={reader.id} readerName={reader.name} />}
         </CardContent>
         <CardContent>
+          <LedgerDateFilter dateFrom={dateFrom} dateTo={dateTo} />
+          {billingBreakdown.byPeriod.length > 0 && (
+            <div className="mb-3 flex flex-col gap-1.5 rounded-md border p-2 text-xs">
+              <span className="font-semibold text-muted-foreground">Month-wise outstanding</span>
+              {billingBreakdown.byPeriod.map((p) => (
+                <div key={p.billingPeriod} className="flex items-center justify-between">
+                  <span>{p.billingPeriod || "Uncategorized"}</span>
+                  <span className={p.amount < 0 ? "text-green-600 dark:text-green-400" : ""}>
+                    {p.amount < 0 ? "Credit: " : ""}₹{Math.abs(p.amount).toFixed(2)}
+                  </span>
+                </div>
+              ))}
+            </div>
+          )}
           {ledgerRows.length === 0 ? (
             <p className="text-sm text-muted-foreground">No billing history yet.</p>
           ) : (

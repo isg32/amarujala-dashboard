@@ -9,6 +9,7 @@ import { postLedgerEntry } from "@/lib/billing/ledger";
 import { PAYU_GATEWAY_ENABLED } from "@/lib/payu/config";
 import { applyCoupon } from "./coupons";
 import { getAmountDue } from "./billing";
+import { sendPaymentConfirmationSms } from "@/lib/sms/send-reminder";
 
 export type PaymentMethod = "cash" | "upi" | "bank_transfer" | "razorpay" | "payu" | "other";
 
@@ -41,7 +42,7 @@ export async function recordPayment(input: RecordPaymentInput) {
   if (user.role === "au_poc" && !user.permissions.canRecordPayments) {
     throw new Error("You don't have permission to record payments. Contact an Administrator.");
   }
-  const [reader] = await db.select({ centerId: readers.centerId }).from(readers).where(eq(readers.id, input.readerId));
+  const [reader] = await db.select({ id: readers.id, centerId: readers.centerId, name: readers.name, mobile: readers.mobile }).from(readers).where(eq(readers.id, input.readerId));
   if (!reader) throw new Error("Reader not found.");
   assertCenterInScope(user, reader.centerId);
 
@@ -62,7 +63,7 @@ export async function recordPayment(input: RecordPaymentInput) {
     await applyCoupon(input.readerId, input.couponId, "Applied during payment recording");
   }
 
-  return db.transaction(async (tx) => {
+  const { id } = await db.transaction(async (tx) => {
     const [inserted] = await tx
       .insert(payments)
       .values({
@@ -93,6 +94,17 @@ export async function recordPayment(input: RecordPaymentInput) {
 
     return { id: inserted.id };
   });
+
+  if (!input.inProcess) {
+    sendPaymentConfirmationSms(
+      { name: reader.name, mobile: reader.mobile },
+      input.amount.toFixed(2),
+      input.transactionReference ?? `PAY-${id}`,
+      input.paymentDate
+    );
+  }
+
+  return { id };
 }
 
 // Admin-only: corrects a mis-entered or duplicate payment by posting an
@@ -221,9 +233,9 @@ export async function markPaymentIntentResult(
     return { alreadyProcessed: false, intent };
   }
 
-  await db.transaction(async (tx) => {
-    const paymentDate = new Date().toISOString().slice(0, 10);
+  const paymentDate = new Date().toISOString().slice(0, 10);
 
+  await db.transaction(async (tx) => {
     await tx
       .update(paymentIntents)
       .set({ status: "success", paidAt: new Date() })
@@ -254,6 +266,16 @@ export async function markPaymentIntentResult(
       tx
     );
   });
+
+  const [reader] = await db.select({ name: readers.name, mobile: readers.mobile }).from(readers).where(eq(readers.id, intent.readerId));
+  if (reader) {
+    sendPaymentConfirmationSms(
+      reader,
+      (recordPaymentAmount ?? Number(intent.amount)).toFixed(2),
+      txnId,
+      paymentDate
+    );
+  }
 
   return { alreadyProcessed: false, intent };
 }

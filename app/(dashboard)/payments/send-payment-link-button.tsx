@@ -13,6 +13,7 @@ import { Input } from "@/components/ui/input";
 import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem, SelectGroup } from "@/components/ui/select";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Popover, PopoverTrigger, PopoverContent } from "@/components/ui/popover";
+import { QrCode } from "@/components/ui/qr-code";
 
 type Coupon = { id: number; code: string; discountAmount: string };
 
@@ -48,6 +49,7 @@ export function SendPaymentLinkButton({
   const [generatedLink, setGeneratedLink] = useState<GeneratedPaymentLink | null>(null);
   const [generateError, setGenerateError] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
+  const [showQr, setShowQr] = useState(false);
 
   // Any option change invalidates a previously generated link — never let
   // "Send" fire an SMS whose amount/dates no longer match what's on screen.
@@ -255,6 +257,16 @@ export function SendPaymentLinkButton({
             </Button>
           </div>
           <p className="rounded bg-muted p-2 text-left text-muted-foreground">{generatedLink.message}</p>
+          <div className="flex items-center justify-end gap-2">
+            <Button type="button" variant="ghost" size="xs" onClick={() => setShowQr(!showQr)}>
+              {showQr ? "Hide QR" : "Show QR"}
+            </Button>
+            {showQr && (
+              <div className="flex justify-center">
+                <QrCode url={generatedLink.payUrl} />
+              </div>
+            )}
+          </div>
         </div>
       )}
 

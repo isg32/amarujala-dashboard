@@ -40,7 +40,7 @@ export const paymentIntentStatusEnum = pgEnum("payment_intent_status", [
   "success",
   "failed",
 ]);
-export const smsTemplateTypeEnum = pgEnum("sms_template_type", ["reminder", "payment_link"]);
+export const smsTemplateTypeEnum = pgEnum("sms_template_type", ["reminder", "payment_link", "payment_confirmation"]);
 
 export const pricingOverrideScopeEnum = pgEnum("pricing_override_scope", [
   "global",
