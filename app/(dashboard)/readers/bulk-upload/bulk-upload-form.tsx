@@ -1,7 +1,8 @@
 "use client";
 
-import { useActionState } from "react";
+import { useActionState, useState } from "react";
 import { bulkUploadReadersAction, type BulkUploadState } from "./actions";
+import { parseReadersFileClient } from "@/lib/bulk-upload/parse-readers-client";
 import { Field, FieldLabel, FieldGroup } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
@@ -29,18 +30,39 @@ const initialState: BulkUploadState = null;
 
 export function BulkUploadForm() {
   const [state, formAction, pending] = useActionState(bulkUploadReadersAction, initialState);
+  const [parsing, setParsing] = useState(false);
 
   return (
     <div className="flex flex-col gap-4">
-      <form action={formAction} className="flex items-end gap-3">
+      <form
+        action={async (formData) => {
+          const fileInput = document.getElementById("file") as HTMLInputElement | null;
+          const file = fileInput?.files?.[0];
+          if (!file) return;
+
+          setParsing(true);
+          const buffer = await file.arrayBuffer();
+          const parsedRows = parseReadersFileClient(buffer);
+          setParsing(false);
+
+          if (parsedRows.length === 0) {
+            formData.set("parsedRows", JSON.stringify([]));
+          } else {
+            formData.set("parsedRows", JSON.stringify(parsedRows));
+          }
+          formAction(formData);
+        }}
+        className="flex items-end gap-3"
+      >
+        <input type="hidden" name="parsedRows" />
         <FieldGroup className="flex-1">
           <Field>
             <FieldLabel htmlFor="file">Excel file (.xlsx)</FieldLabel>
             <Input id="file" name="file" type="file" accept=".xlsx,.xls,.csv" required />
           </Field>
         </FieldGroup>
-        <Button type="submit" disabled={pending}>
-          {pending ? "Uploading..." : "Upload"}
+        <Button type="submit" disabled={pending || parsing}>
+          {parsing ? "Parsing..." : pending ? "Uploading..." : "Upload"}
         </Button>
       </form>
 
