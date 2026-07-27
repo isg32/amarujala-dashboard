@@ -244,15 +244,18 @@ export async function createReader(input: ReaderInput) {
 
 export type BulkCreateResult = {
   insertedCount: number;
+  updatedCount: number;
   errors: { row: number; reason: string }[];
 };
 
-// Validates and inserts a batch of parsed spreadsheet rows. City/Center are
-// resolved by name against listAssignableCentersWithPocs() — which is
-// already center-scoped, so an AU POC referencing a Center outside their
-// assignment naturally fails to resolve rather than needing a separate check.
-// Invalid rows are reported, not silently dropped; valid rows are inserted
-// in one transaction.
+// Validates, inserts new, and updates existing readers from parsed spreadsheet
+// rows. City/Center are resolved by name against listAssignableCentersWithPocs()
+// — which is already center-scoped, so an AU POC referencing a Center outside
+// their assignment naturally fails to resolve rather than needing a separate
+// check. Readers are matched by mobile number: if a row's mobile already exists
+// in the DB, the row is treated as an update (name, email, address, landmark,
+// subscriptionStartDate, remarks, assignedPocId are overwritten — mobile,
+// centerId, status, billingAnchorDay are never changed by bulk upload).
 export async function bulkCreateReaders(parsedRows: ParsedReaderRow[]): Promise<BulkCreateResult> {
   const user = await requireAppUser();
   if (user.role === "au_poc" && !user.permissions.canAddReaders) {
@@ -288,41 +291,66 @@ export async function bulkCreateReaders(parsedRows: ParsedReaderRow[]): Promise<
     candidates.push({ row: parsed.row, centerId: center.id, assignedPocId, data });
   }
 
+  // Separate inserts from updates by checking which mobiles already exist
+  let insertedCount = 0;
+  let updatedCount = 0;
+
   if (candidates.length > 0) {
     const existing = await db
-      .select({ mobile: readers.mobile })
+      .select({ mobile: readers.mobile, id: readers.id })
       .from(readers)
       .where(inArray(readers.mobile, candidates.map((c) => c.data.mobile)));
-    const existingMobiles = new Set(existing.map((e) => e.mobile));
+    const existingByMobile = new Map(existing.map((e) => [e.mobile, e.id]));
 
-    for (const candidate of candidates.filter((c) => existingMobiles.has(c.data.mobile))) {
-      errors.push({ row: candidate.row, reason: `Mobile number ${candidate.data.mobile} already exists` });
+    const toInsert = candidates.filter((c) => !existingByMobile.has(c.data.mobile));
+    const toUpdate = candidates.filter((c) => existingByMobile.has(c.data.mobile));
+
+    // Insert new readers
+    if (toInsert.length > 0) {
+      await db.transaction(async (tx) => {
+        for (const candidate of toInsert) {
+          await insertReaderRow(tx, user.id, {
+            name: candidate.data.name,
+            mobile: candidate.data.mobile,
+            email: candidate.data.email,
+            address: candidate.data.address,
+            landmark: candidate.data.landmark,
+            centerId: candidate.centerId,
+            assignedPocId: candidate.assignedPocId,
+            subscriptionStartDate: candidate.data.subscriptionStartDate,
+            remarks: candidate.data.remarks,
+          });
+          insertedCount++;
+        }
+      });
     }
-  }
-  const toInsert = candidates.filter((c) => !errors.some((e) => e.row === c.row));
 
-  let insertedCount = 0;
-  if (toInsert.length > 0) {
-    await db.transaction(async (tx) => {
-      for (const candidate of toInsert) {
-        await insertReaderRow(tx, user.id, {
-          name: candidate.data.name,
-          mobile: candidate.data.mobile,
-          email: candidate.data.email,
-          address: candidate.data.address,
-          landmark: candidate.data.landmark,
-          centerId: candidate.centerId,
-          assignedPocId: candidate.assignedPocId,
-          subscriptionStartDate: candidate.data.subscriptionStartDate,
-          remarks: candidate.data.remarks,
-        });
-        insertedCount++;
-      }
-    });
+    // Update existing readers (name, email, address, landmark,
+    // subscriptionStartDate, remarks, assignedPocId — NOT mobile, centerId, status)
+    if (toUpdate.length > 0) {
+      await db.transaction(async (tx) => {
+        for (const candidate of toUpdate) {
+          const readerId = existingByMobile.get(candidate.data.mobile)!;
+          await tx
+            .update(readers)
+            .set({
+              name: candidate.data.name,
+              email: candidate.data.email ?? null,
+              address: candidate.data.address,
+              landmark: candidate.data.landmark ?? null,
+              subscriptionStartDate: candidate.data.subscriptionStartDate,
+              remarks: candidate.data.remarks ?? null,
+              assignedPocId: candidate.assignedPocId ?? null,
+            })
+            .where(eq(readers.id, readerId));
+          updatedCount++;
+        }
+      });
+    }
   }
 
   errors.sort((a, b) => a.row - b.row);
-  return { insertedCount, errors };
+  return { insertedCount, updatedCount, errors };
 }
 
 // Admin-only per the FRD ("Administrators should be able to transfer the

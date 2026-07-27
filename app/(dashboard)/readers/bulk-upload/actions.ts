@@ -5,7 +5,7 @@ import { bulkCreateReaders } from "@/lib/data/readers";
 import type { ParsedReaderRow } from "@/lib/bulk-upload/parse-readers-client";
 
 export type BulkUploadState =
-  | { insertedCount: number; errors: { row: number; reason: string; raw: Record<string, string> }[] }
+  | { insertedCount: number; updatedCount: number; errors: { row: number; reason: string; raw: Record<string, string> }[] }
   | { formError: string }
   | null;
 
@@ -29,11 +29,12 @@ export async function bulkUploadReadersAction(
     return { formError: "The file has no data rows." };
   }
 
-  const { insertedCount, errors } = await bulkCreateReaders(parsedRows);
+  const { insertedCount, updatedCount, errors } = await bulkCreateReaders(parsedRows);
 
   const rawByRow = new Map(parsedRows.map((r) => [r.row, r.raw]));
   return {
     insertedCount,
+    updatedCount,
     errors: errors.map((e) => ({
       ...e,
       raw: Object.fromEntries(Object.entries(rawByRow.get(e.row) ?? {}).map(([k, v]) => [k, v == null ? "" : String(v)])),

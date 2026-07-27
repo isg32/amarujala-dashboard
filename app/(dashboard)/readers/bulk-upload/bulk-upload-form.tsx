@@ -76,7 +76,10 @@ export function BulkUploadForm() {
       {state && "insertedCount" in state && (
         <div className="flex flex-col gap-3">
           <Alert>
-            <AlertTitle>{state.insertedCount} reader(s) added</AlertTitle>
+            <AlertTitle>
+              {state.insertedCount} added
+              {state.updatedCount > 0 ? `, ${state.updatedCount} updated` : ""}
+            </AlertTitle>
             {state.errors.length > 0 && (
               <AlertDescription>{state.errors.length} row(s) were skipped — see below.</AlertDescription>
             )}
