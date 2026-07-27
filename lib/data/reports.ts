@@ -1,5 +1,5 @@
 import "server-only";
-import { and, count, eq, gte, inArray, lt, lte, desc, sql as sqlOp, sum } from "drizzle-orm";
+import { and, count, eq, gte, inArray, lt, lte, desc, sql as sqlOp, sum, isNull } from "drizzle-orm";
 import { requireAppUser, type AppUser } from "@/lib/auth/session";
 import { db } from "@/lib/db";
 import { readers, centers, cities, units, appUsers, attendance, payments, readerBillingLedger, coupons, readerCoupons } from "@/lib/db/schema";
@@ -379,7 +379,70 @@ export async function getDetailedLedgerReport(filters: GroupedReportFilters = {}
       )
     )
     .orderBy(desc(readerBillingLedger.createdAt));
-  return rows;
+
+  // Collect unique (readerId, billingPeriod) pairs to compute attendance stats
+  const periodKeys = new Map<string, { readerId: number; period: string }>();
+  for (const r of rows) {
+    if (r.billingPeriod && !periodKeys.has(`${r.readerId}-${r.billingPeriod}`)) {
+      periodKeys.set(`${r.readerId}-${r.billingPeriod}`, { readerId: r.readerId, period: r.billingPeriod });
+    }
+  }
+
+  const attendanceByKey = new Map<string, { delivered: number; notDelivered: number; notUpdated: number; notApplicable: number }>();
+
+  if (periodKeys.size > 0) {
+    // Fetch attendance for all unique reader+period combinations
+    const today = new Date().toISOString().slice(0, 10);
+    for (const { readerId, period } of periodKeys.values()) {
+      const periodStart = `${period}-01`;
+      const [y, m] = period.split("-").map(Number);
+      const periodEnd = new Date(Date.UTC(y, m, 0)).toISOString().slice(0, 10);
+
+      const attRows = await db
+        .select({ status: attendance.status, attendanceDate: attendance.attendanceDate })
+        .from(attendance)
+        .where(
+          and(
+            eq(attendance.readerId, readerId),
+            gte(attendance.attendanceDate, periodStart),
+            lte(attendance.attendanceDate, periodEnd)
+          )
+        );
+
+      const delivered = attRows.filter((a) => a.status === "delivered").length;
+      const notDelivered = attRows.filter((a) => a.status === "not_delivered").length;
+
+      // Total days in the period up to today
+      const periodStartDate = new Date(periodStart + "T00:00:00Z");
+      const periodEndDate = new Date(periodEnd + "T00:00:00Z");
+      const todayDate = new Date(today + "T00:00:00Z");
+      const effectiveEnd = todayDate < periodEndDate ? todayDate : periodEndDate;
+
+      let totalDaysSoFar = 0;
+      const cursor = new Date(periodStartDate);
+      while (cursor <= effectiveEnd) {
+        totalDaysSoFar++;
+        cursor.setUTCDate(cursor.getUTCDate() + 1);
+      }
+
+      const notUpdated = totalDaysSoFar - delivered - notDelivered;
+      const totalDaysInPeriod = Math.round((periodEndDate.getTime() - periodStartDate.getTime()) / 86400000) + 1;
+      const notApplicable = totalDaysInPeriod - totalDaysSoFar;
+
+      attendanceByKey.set(`${readerId}-${period}`, { delivered, notDelivered, notUpdated, notApplicable });
+    }
+  }
+
+  return rows.map((r) => {
+    const att = r.billingPeriod ? attendanceByKey.get(`${r.readerId}-${r.billingPeriod}`) : undefined;
+    return {
+      ...r,
+      delivered: att?.delivered ?? 0,
+      notDelivered: att?.notDelivered ?? 0,
+      notUpdated: att?.notUpdated ?? 0,
+      notApplicable: att?.notApplicable ?? 0,
+    };
+  });
 }
 
 export async function getCouponReport(filters: GroupedReportFilters = {}) {
