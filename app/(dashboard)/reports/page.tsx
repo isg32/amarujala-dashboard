@@ -71,7 +71,7 @@ export default async function ReportsPage({
 
       <Card>
         <CardContent className="pt-6">
-          <form className="flex flex-wrap items-end gap-3" method="get">
+          <form className="flex flex-wrap items-end gap-3" method="get" autoComplete="off">
             <div className="flex flex-col gap-1.5">
               <label htmlFor="type" className="text-sm font-medium">Report</label>
               <Select
@@ -79,7 +79,7 @@ export default async function ReportsPage({
                 defaultValue={type}
                 items={Object.fromEntries(REPORT_TYPES.map((r) => [r.value, r.label]))}
               >
-                <SelectTrigger id="type" className="w-56">
+                <SelectTrigger id="type" className="w-full sm:w-56">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
@@ -101,7 +101,7 @@ export default async function ReportsPage({
                   defaultValue={params.centerId || "any"}
                   items={{ any: "Any", ...Object.fromEntries(centers.map((c) => [String(c.id), c.name])) }}
                 >
-                  <SelectTrigger id="centerId" className="w-48">
+                  <SelectTrigger id="centerId" className="w-full sm:w-48">
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
@@ -120,7 +120,7 @@ export default async function ReportsPage({
             {(type === "reader" || type === "collection") && (
               <div className="flex flex-col gap-1.5">
                 <label htmlFor="search" className="text-sm font-medium">Search</label>
-                <Input id="search" name="search" defaultValue={params.search} placeholder="Name, mobile, ID" className="w-48" />
+                <Input id="search" name="search" defaultValue={params.search} placeholder="Name, mobile, ID" className="w-full sm:w-48" />
               </div>
             )}
             {(type === "attendance" ||

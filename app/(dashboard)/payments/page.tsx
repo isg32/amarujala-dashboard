@@ -60,14 +60,14 @@ export default async function PaymentsPage({
 
   return (
     <div className="flex flex-col gap-6">
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
         <h1 className="text-lg font-semibold">Payment Transactions</h1>
         {currentUser?.role === "admin" && (
-          <div className="flex gap-2">
-            <Button variant="outline" render={<Link href="/payments/history" prefetch={false} />} nativeButton={false}>
+          <div className="flex flex-wrap gap-2">
+            <Button variant="outline" size="sm" render={<Link href="/payments/history" prefetch={false} />} nativeButton={false}>
               Payment History
             </Button>
-            <Button variant="outline" render={<a href={`${process.env.NEXT_PUBLIC_BASE_PATH ?? ""}/api/export/payments?${exportQuery}`} />} nativeButton={false}>
+            <Button variant="outline" size="sm" render={<a href={`${process.env.NEXT_PUBLIC_BASE_PATH ?? ""}/api/export/payments?${exportQuery}`} />} nativeButton={false}>
               Export
             </Button>
           </div>
@@ -76,10 +76,10 @@ export default async function PaymentsPage({
 
       <Card>
         <CardContent className="pt-6">
-          <form className="flex flex-wrap items-end gap-3" method="get">
+          <form className="flex flex-wrap items-end gap-3" method="get" autoComplete="off">
             <div className="flex flex-col gap-1.5">
               <label htmlFor="search" className="text-sm font-medium">Search</label>
-              <Input id="search" name="search" defaultValue={params.search} placeholder="Reader name, mobile, ID" className="w-56" />
+              <Input id="search" name="search" defaultValue={params.search} placeholder="Reader name, mobile, ID" className="w-full sm:w-56" />
             </div>
             <div className="flex flex-col gap-1.5">
               <label htmlFor="dateFrom" className="text-sm font-medium">From</label>
@@ -96,7 +96,7 @@ export default async function PaymentsPage({
                 defaultValue={params.centerId || "any"}
                 items={{ any: "Any", ...Object.fromEntries(centers.map((c) => [String(c.id), c.name])) }}
               >
-                <SelectTrigger id="centerId" className="w-40">
+                <SelectTrigger id="centerId" className="w-full sm:w-40">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
@@ -118,7 +118,7 @@ export default async function PaymentsPage({
                 defaultValue={params.method || "any"}
                 items={{ any: "Any", ...METHOD_LABELS }}
               >
-                <SelectTrigger id="method" className="w-36">
+                <SelectTrigger id="method" className="w-full sm:w-36">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>

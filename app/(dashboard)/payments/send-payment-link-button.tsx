@@ -94,25 +94,8 @@ export function SendPaymentLinkButton({
   }, [billingBreakdown, outstandingBalance]);
 
   return (
-    <div className="flex flex-col gap-2 sm:items-end">
-      {billingBreakdown && (
-        <div className="flex flex-wrap gap-1.5">
-          {billingBreakdown.previousOutstanding > 0 && (
-            <Button type="button" variant="outline" size="xs" onClick={() => setMonthSelection("previous")}>
-              Prev: ₹{billingBreakdown.previousOutstanding.toFixed(0)}
-            </Button>
-          )}
-          {billingBreakdown.currentMonthUnbilled > 0 && (
-            <Button type="button" variant="outline" size="xs" onClick={() => setMonthSelection("current")}>
-              Current: ₹{billingBreakdown.currentMonthUnbilled.toFixed(0)}
-            </Button>
-          )}
-          <Button type="button" variant="outline" size="xs" onClick={() => setMonthSelection("all")}>
-            All: ₹{Number(outstandingBalance).toFixed(0)}
-          </Button>
-        </div>
-      )}
-      <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:flex-wrap">
+    <div className="flex flex-col gap-2">
+      <div className="flex flex-wrap items-center gap-1.5">
         <Input
           type="number"
           step="0.01"
@@ -122,9 +105,28 @@ export function SendPaymentLinkButton({
             setAmount(e.target.value);
             invalidateGeneratedLink();
           }}
-          className="w-full sm:w-24"
+          className="w-20"
           aria-label="Payment link amount"
         />
+        {billingBreakdown && (
+          <>
+            {billingBreakdown.previousOutstanding > 0 && (
+              <Button type="button" variant="outline" size="xs" onClick={() => setMonthSelection("previous")}>
+                Prev: ₹{billingBreakdown.previousOutstanding.toFixed(0)}
+              </Button>
+            )}
+            {billingBreakdown.currentMonthUnbilled > 0 && (
+              <Button type="button" variant="outline" size="xs" onClick={() => setMonthSelection("current")}>
+                Current: ₹{billingBreakdown.currentMonthUnbilled.toFixed(0)}
+              </Button>
+            )}
+            <Button type="button" variant="outline" size="xs" onClick={() => setMonthSelection("all")}>
+              All: ₹{Number(outstandingBalance).toFixed(0)}
+            </Button>
+          </>
+        )}
+      </div>
+      <div className="flex flex-wrap items-center gap-1.5">
         {coupons.length > 0 && (
           <Select
             value={voucherId}

@@ -97,23 +97,23 @@ export default async function ReadersPage({
 
   return (
     <div className="flex flex-col gap-6">
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <h1 className="text-lg font-semibold">Reader Directory</h1>
           <p className="text-sm text-muted-foreground">{total} reader{total === 1 ? "" : "s"} found</p>
         </div>
-        <div className="flex gap-2">
+        <div className="flex flex-wrap gap-2">
           {isAdmin && (
-            <Button variant="outline" render={<a href={`${process.env.NEXT_PUBLIC_BASE_PATH ?? ""}/api/export/readers?${exportQuery}`} />} nativeButton={false}>
+            <Button variant="outline" size="sm" render={<a href={`${process.env.NEXT_PUBLIC_BASE_PATH ?? ""}/api/export/readers?${exportQuery}`} />} nativeButton={false}>
               Export
             </Button>
           )}
           {canAddReaders && (
             <>
-              <Button variant="outline" render={<Link href="/readers/bulk-upload" prefetch={false} />} nativeButton={false}>
+              <Button variant="outline" size="sm" render={<Link href="/readers/bulk-upload" prefetch={false} />} nativeButton={false}>
                 Bulk Upload
               </Button>
-              <Button render={<Link href="/readers/new" prefetch={false} />} nativeButton={false}>
+              <Button size="sm" render={<Link href="/readers/new" prefetch={false} />} nativeButton={false}>
                 Add Reader
               </Button>
             </>
@@ -126,7 +126,7 @@ export default async function ReadersPage({
           <form className="flex flex-wrap items-end gap-3" method="get">
             <div className="flex flex-col gap-1.5">
               <label htmlFor="search" className="text-sm font-medium">Search</label>
-              <Input id="search" name="search" defaultValue={params.search} placeholder="Name, mobile, email, reader ID" className="w-64" />
+              <Input id="search" name="search" defaultValue={params.search} placeholder="Name, mobile, email, reader ID" className="w-full sm:w-64" />
             </div>
             {isAdmin ? (
               <UnitCenterFilter
@@ -143,7 +143,7 @@ export default async function ReadersPage({
                   defaultValue={params.centerId || "any"}
                   items={{ any: "Any", ...Object.fromEntries(centers.map((c) => [String(c.id), c.name])) }}
                 >
-                  <SelectTrigger id="centerId" className="w-48">
+                  <SelectTrigger id="centerId" className="w-full sm:w-48">
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
@@ -161,7 +161,7 @@ export default async function ReadersPage({
             )}
             <div className="flex flex-col gap-1.5">
               <label htmlFor="landmark" className="text-sm font-medium">Landmark</label>
-              <Input id="landmark" name="landmark" defaultValue={params.landmark} placeholder="Any" className="w-40" />
+              <Input id="landmark" name="landmark" defaultValue={params.landmark} placeholder="Any" className="w-full sm:w-40" />
             </div>
             <div className="flex flex-col gap-1.5">
               <label htmlFor="status" className="text-sm font-medium">Status</label>
@@ -170,7 +170,7 @@ export default async function ReadersPage({
                 defaultValue={params.status || "any"}
                 items={{ any: "Any", active: "Active", inactive: "Inactive" }}
               >
-                <SelectTrigger id="status" className="w-36">
+                <SelectTrigger id="status" className="w-full sm:w-36">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
@@ -203,7 +203,7 @@ export default async function ReadersPage({
       </Card>
 
       {total > 0 && (
-        <div className="flex items-center justify-between text-sm text-muted-foreground">
+        <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between text-sm text-muted-foreground">
           <span>
             Showing {firstRow}–{lastRow} of {total}
           </span>
@@ -217,7 +217,7 @@ export default async function ReadersPage({
                 Previous
               </Button>
             )}
-            <span>
+            <span className="whitespace-nowrap">
               Page {page} of {totalPages}
             </span>
             {page < totalPages ? (

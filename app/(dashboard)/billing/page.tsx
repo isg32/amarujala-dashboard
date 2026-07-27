@@ -47,7 +47,7 @@ export default async function BillingPage({
           <form className="flex flex-wrap items-end gap-3" method="get">
             <div className="flex flex-col gap-1.5">
               <label htmlFor="search" className="text-sm font-medium">Search Reader</label>
-              <Input id="search" name="search" defaultValue={params.search} placeholder="Name, mobile, ID" className="w-56" />
+              <Input id="search" name="search" defaultValue={params.search} placeholder="Name, mobile, ID" className="w-full sm:w-56" />
             </div>
             <div className="flex flex-col gap-1.5">
               <label htmlFor="centerId" className="text-sm font-medium">Center</label>
@@ -56,7 +56,7 @@ export default async function BillingPage({
                 defaultValue={params.centerId || "any"}
                 items={{ any: "Any", ...Object.fromEntries(centers.map((c) => [String(c.id), c.name])) }}
               >
-                <SelectTrigger id="centerId" className="w-48">
+                <SelectTrigger id="centerId" className="w-full sm:w-48">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
@@ -78,7 +78,7 @@ export default async function BillingPage({
                 defaultValue={params.status || "any"}
                 items={{ any: "Any", due: "Due", paid: "Paid / Credit" }}
               >
-                <SelectTrigger id="status" className="w-36">
+                <SelectTrigger id="status" className="w-full sm:w-36">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>

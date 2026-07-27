@@ -33,7 +33,7 @@ export function UnitCenterFilter({
           onValueChange={(v) => setUnitId(v ?? "any")}
           items={{ any: "Any", ...Object.fromEntries(units.map((u) => [String(u.id), u.name])) }}
         >
-          <SelectTrigger id="unitId" className="w-40">
+          <SelectTrigger id="unitId" className="w-full sm:w-40">
             <SelectValue />
           </SelectTrigger>
           <SelectContent>
@@ -55,7 +55,7 @@ export function UnitCenterFilter({
           defaultValue={visibleCenters.some((c) => String(c.id) === defaultCenterId) ? defaultCenterId : "any"}
           items={{ any: "Any", ...Object.fromEntries(visibleCenters.map((c) => [String(c.id), c.name])) }}
         >
-          <SelectTrigger id="centerId" className="w-48">
+          <SelectTrigger id="centerId" className="w-full sm:w-48">
             <SelectValue />
           </SelectTrigger>
           <SelectContent>

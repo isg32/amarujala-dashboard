@@ -92,7 +92,7 @@ export default async function PaymentHistoryPage({
               <label htmlFor="search" className="text-sm font-medium">
                 Search Reader
               </label>
-              <Input id="search" name="search" defaultValue={params.search} placeholder="Name, mobile, ID" className="w-56" />
+              <Input id="search" name="search" defaultValue={params.search} placeholder="Name, mobile, ID" className="w-full sm:w-56" />
             </div>
             <div className="flex flex-col gap-1.5">
               <label htmlFor="centerId" className="text-sm font-medium">
@@ -103,7 +103,7 @@ export default async function PaymentHistoryPage({
                 defaultValue={params.centerId || "any"}
                 items={{ any: "Any", ...Object.fromEntries(centers.map((c) => [String(c.id), c.name])) }}
               >
-                <SelectTrigger id="centerId" className="w-48">
+                <SelectTrigger id="centerId" className="w-full sm:w-48">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
@@ -127,7 +127,7 @@ export default async function PaymentHistoryPage({
                 defaultValue={params.status || "any"}
                 items={{ any: "Any", pending: "Unpaid (Pending)", success: "Paid", failed: "Failed" }}
               >
-                <SelectTrigger id="status" className="w-40">
+                <SelectTrigger id="status" className="w-full sm:w-40">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
@@ -215,7 +215,7 @@ export default async function PaymentHistoryPage({
                 defaultValue={params.dueCenterId || "any"}
                 items={{ any: "Any", ...Object.fromEntries(centers.map((c) => [String(c.id), c.name])) }}
               >
-                <SelectTrigger id="dueCenterId" className="w-48">
+                <SelectTrigger id="dueCenterId" className="w-full sm:w-48">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
@@ -292,7 +292,7 @@ export default async function PaymentHistoryPage({
               <label htmlFor="txSearch" className="text-sm font-medium">
                 Search Reader
               </label>
-              <Input id="txSearch" name="txSearch" defaultValue={params.txSearch} placeholder="Name, mobile, ID" className="w-56" />
+              <Input id="txSearch" name="txSearch" defaultValue={params.txSearch} placeholder="Name, mobile, ID" className="w-full sm:w-56" />
             </div>
             <div className="flex flex-col gap-1.5">
               <label htmlFor="txCenterId" className="text-sm font-medium">
@@ -303,7 +303,7 @@ export default async function PaymentHistoryPage({
                 defaultValue={params.txCenterId || "any"}
                 items={{ any: "Any", ...Object.fromEntries(centers.map((c) => [String(c.id), c.name])) }}
               >
-                <SelectTrigger id="txCenterId" className="w-48">
+                <SelectTrigger id="txCenterId" className="w-full sm:w-48">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
@@ -327,7 +327,7 @@ export default async function PaymentHistoryPage({
                 defaultValue={params.txMethod || "any"}
                 items={{ any: "Any", ...METHOD_LABELS }}
               >
-                <SelectTrigger id="txMethod" className="w-36">
+                <SelectTrigger id="txMethod" className="w-full sm:w-36">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
