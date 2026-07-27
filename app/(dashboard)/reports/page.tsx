@@ -2,7 +2,7 @@ import Link from "next/link";
 import { requireAppUser } from "@/lib/auth/session";
 import { listReaders, listAssignableCentersWithPocs } from "@/lib/data/readers";
 import { listPaymentTransactions } from "@/lib/data/payments";
-import { getPaymentDueReport, getAttendanceReport, getGroupedReport, getMonthlySummaryReport, getSupplyReport, getCreditNoteReport, getCouponReport } from "@/lib/data/reports";
+import { getPaymentDueReport, getAttendanceReport, getGroupedReport, getMonthlySummaryReport, getSupplyReport, getCreditNoteReport, getCouponReport, getDetailedLedgerReport } from "@/lib/data/reports";
 import { formatAmountDue } from "@/lib/billing/format";
 import { Card, CardContent } from "@/components/ui/card";
 import { Table, TableHeader, TableRow, TableHead, TableBody, TableCell } from "@/components/ui/table";
@@ -29,6 +29,7 @@ const REPORT_TYPES = [
   { value: "supply", label: "Supply Report" },
   { value: "credit_note", label: "Credit Note Report" },
   { value: "coupon_report", label: "Coupon Report" },
+  { value: "detailed_ledger", label: "Detailed Ledger" },
 ] as const;
 
 type ReportType = (typeof REPORT_TYPES)[number]["value"];
@@ -129,7 +130,8 @@ export default async function ReportsPage({
               type === "poc_wise" ||
               type === "supply" ||
               type === "credit_note" ||
-              type === "coupon_report") && (
+              type === "coupon_report" ||
+              type === "detailed_ledger") && (
               <>
                 <div className="flex flex-col gap-1.5">
                   <label htmlFor="dateFrom" className="text-sm font-medium">From</label>
@@ -174,7 +176,9 @@ async function ReportTable({
             <TableHead>Mobile</TableHead>
             <TableHead>City</TableHead>
             <TableHead>Center</TableHead>
+            <TableHead>POC</TableHead>
             <TableHead>Status</TableHead>
+            <TableHead>Sub. Start</TableHead>
             <TableHead>Outstanding</TableHead>
           </TableRow>
         </TableHeader>
@@ -185,7 +189,9 @@ async function ReportTable({
               <TableCell>{r.mobile}</TableCell>
               <TableCell>{r.cityName}</TableCell>
               <TableCell>{r.centerName}</TableCell>
+              <TableCell>{r.pocName ?? "—"}</TableCell>
               <TableCell>{r.status}</TableCell>
+              <TableCell className="whitespace-nowrap text-xs">{r.subscriptionStartDate}</TableCell>
               <TableCell>{formatAmountDue(Number(r.outstandingBalance))}</TableCell>
             </TableRow>
           ))}
@@ -357,6 +363,44 @@ async function ReportTable({
               <TableCell>{r.entryType === "coupon_discount" ? "Coupon" : "Adjustment"}</TableCell>
               <TableCell>₹{Number(r.amount).toFixed(2)}</TableCell>
               <TableCell className="text-xs text-muted-foreground">{r.description ?? "—"}</TableCell>
+            </TableRow>
+          ))}
+        </TableBody>
+      </ReportCard>
+    );
+  }
+
+  if (type === "detailed_ledger") {
+    const rows = await getDetailedLedgerReport({ centerId, dateFrom, dateTo });
+    return (
+      <ReportCard>
+        <TableHeader>
+          <TableRow>
+            <TableHead>Date</TableHead>
+            <TableHead>Reader</TableHead>
+            <TableHead>City</TableHead>
+            <TableHead>Center</TableHead>
+            <TableHead>POC</TableHead>
+            <TableHead>Type</TableHead>
+            <TableHead>Period</TableHead>
+            <TableHead>Amount</TableHead>
+            <TableHead>Description</TableHead>
+          </TableRow>
+        </TableHeader>
+        <TableBody>
+          {rows.map((r, i) => (
+            <TableRow key={i}>
+              <TableCell className="whitespace-nowrap text-xs">{r.entryDate}</TableCell>
+              <TableCell><Link href={`/readers/${r.readerId}`} className="hover:underline">{r.readerName}</Link></TableCell>
+              <TableCell>{r.cityName}</TableCell>
+              <TableCell>{r.centerName}</TableCell>
+              <TableCell>{r.pocName ?? "—"}</TableCell>
+              <TableCell>{r.entryType === "monthly_charge" ? "Charge" : r.entryType === "coupon_discount" ? "Coupon" : r.entryType === "payment" ? "Payment" : r.entryType === "adjustment" ? "Adjustment" : r.entryType}</TableCell>
+              <TableCell className="text-xs text-muted-foreground">{r.billingPeriod ?? "—"}</TableCell>
+              <TableCell className={Number(r.amount) < 0 ? "text-green-600 dark:text-green-400" : ""}>
+                ₹{Math.abs(Number(r.amount)).toFixed(2)}
+              </TableCell>
+              <TableCell className="max-w-48 truncate text-xs text-muted-foreground">{r.description ?? "—"}</TableCell>
             </TableRow>
           ))}
         </TableBody>

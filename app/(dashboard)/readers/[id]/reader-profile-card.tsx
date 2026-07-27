@@ -19,7 +19,10 @@ type Reader = {
   pocName: string | null;
   subscriptionStartDate: string;
   status: "active" | "inactive";
+  centerId: number;
 };
+
+type Center = { id: number; name: string; pocs: { id: string; name: string }[] };
 
 type Transfer = {
   id: number;
@@ -34,11 +37,13 @@ export function ReaderProfileCard({
   transfers,
   isAdmin,
   actions,
+  centers,
 }: {
   reader: Reader;
   transfers: Transfer[];
   isAdmin: boolean;
   actions: React.ReactNode;
+  centers: Center[];
 }) {
   const [editing, setEditing] = useState(false);
 
@@ -64,7 +69,7 @@ export function ReaderProfileCard({
 
       {editing ? (
         <CardContent>
-          <EditReaderForm reader={reader} onDone={() => setEditing(false)} />
+          <EditReaderForm reader={reader} centers={centers} onDone={() => setEditing(false)} />
         </CardContent>
       ) : (
         <CardContent className="grid grid-cols-1 gap-x-6 gap-y-3 text-sm sm:grid-cols-2">

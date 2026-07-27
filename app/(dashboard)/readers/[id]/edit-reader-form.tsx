@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { updateReaderAction } from "../actions";
 import { Field, FieldLabel, FieldGroup } from "@/components/ui/field";
@@ -17,14 +17,19 @@ type Reader = {
   landmark: string | null;
   subscriptionStartDate: string;
   status: "active" | "inactive";
+  centerId: number;
 };
 
-// Deliberately excludes Center — that goes through the dedicated Transfer
-// Center flow so the move stays logged to reader_transfers.
-export function EditReaderForm({ reader, onDone }: { reader: Reader; onDone: () => void }) {
+type Center = { id: number; name: string; pocs: { id: string; name: string }[] };
+
+export function EditReaderForm({ reader, centers, onDone }: { reader: Reader; centers: Center[]; onDone: () => void }) {
   const router = useRouter();
   const [pending, setPending] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const currentCenterPocs = useMemo(
+    () => centers.find((c) => c.id === reader.centerId)?.pocs ?? [],
+    [centers, reader.centerId]
+  );
 
   return (
     <form
@@ -63,6 +68,33 @@ export function EditReaderForm({ reader, onDone }: { reader: Reader; onDone: () 
           <Field>
             <FieldLabel htmlFor="edit-subscriptionStartDate">Subscription Start Date</FieldLabel>
             <Input id="edit-subscriptionStartDate" name="subscriptionStartDate" type="date" defaultValue={reader.subscriptionStartDate} required />
+          </Field>
+          <Field>
+            <FieldLabel htmlFor="edit-assignedPocId">Assigned POC</FieldLabel>
+            {currentCenterPocs.length <= 1 ? (
+              <>
+                {currentCenterPocs.length === 1 && <input type="hidden" name="assignedPocId" value={currentCenterPocs[0].id} />}
+                <div className="rounded-md border border-input px-2.5 py-1.5 text-sm text-muted-foreground">
+                  {currentCenterPocs.length === 1 ? currentCenterPocs[0].name : "No POC for this center"}
+                </div>
+              </>
+            ) : (
+              <Select
+                name="assignedPocId"
+                items={Object.fromEntries(currentCenterPocs.map((poc) => [poc.id, poc.name]))}
+              >
+                <SelectTrigger id="edit-assignedPocId" className="w-full">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectGroup>
+                    {currentCenterPocs.map((poc) => (
+                      <SelectItem key={poc.id} value={poc.id}>{poc.name}</SelectItem>
+                    ))}
+                  </SelectGroup>
+                </SelectContent>
+              </Select>
+            )}
           </Field>
         </div>
         <Field>

@@ -329,7 +329,7 @@ export async function bulkCreateReaders(parsedRows: ParsedReaderRow[]): Promise<
 // reader"). Updates readers.center_id and logs the move — all history keyed
 // off reader_id (attendance/payments/coupons/ledger) is untouched, only the
 // current operational assignment changes.
-export async function transferReader(readerId: number, toCenterId: number, remarks?: string) {
+export async function transferReader(readerId: number, toCenterId: number, remarks?: string, assignedPocId?: string) {
   const user = await requireAdmin();
 
   const [reader] = await db.select({ centerId: readers.centerId }).from(readers).where(eq(readers.id, readerId));
@@ -344,7 +344,7 @@ export async function transferReader(readerId: number, toCenterId: number, remar
       transferredBy: user.id,
       remarks,
     });
-    await tx.update(readers).set({ centerId: toCenterId }).where(eq(readers.id, readerId));
+    await tx.update(readers).set({ centerId: toCenterId, assignedPocId: assignedPocId ?? null }).where(eq(readers.id, readerId));
   });
 }
 
@@ -404,7 +404,7 @@ export async function bulkDeleteReaders(readerIds: number[]): Promise<{ deleted:
 // every Center change stays logged to reader_transfers).
 export async function updateReader(
   readerId: number,
-  input: { name: string; mobile: string; email?: string; address: string; landmark?: string; subscriptionStartDate: string; status: "active" | "inactive" }
+  input: { name: string; mobile: string; email?: string; address: string; landmark?: string; subscriptionStartDate: string; status: "active" | "inactive"; assignedPocId?: string }
 ) {
   await requireAdmin();
   const [reader] = await db.select({ id: readers.id }).from(readers).where(eq(readers.id, readerId));
@@ -420,6 +420,7 @@ export async function updateReader(
         landmark: input.landmark ?? null,
         subscriptionStartDate: input.subscriptionStartDate,
         status: input.status,
+        assignedPocId: input.assignedPocId ?? null,
       })
       .where(eq(readers.id, readerId));
   } catch (err) {

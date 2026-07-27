@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { getCurrentAppUser } from "@/lib/auth/session";
-import { getReader, listTransfersForReader } from "@/lib/data/readers";
+import { getReader, listTransfersForReader, listAssignableCentersWithPocs } from "@/lib/data/readers";
 import { listAttendanceForReader } from "@/lib/data/attendance";
 import { getAmountDue, getBillingBreakdown, listLedgerForReader } from "@/lib/data/billing";
 import { listPaymentsForReader } from "@/lib/data/payments";
@@ -51,7 +51,7 @@ export default async function ReaderProfilePage({
   const currentUser = await getCurrentAppUser();
   const isAdmin = currentUser?.role === "admin";
 
-  const [attendanceRows, billingBreakdown, amountDue, ledgerRows, paymentRows, appliedCoupons, availableCoupons, transfers] =
+  const [attendanceRows, billingBreakdown, amountDue, ledgerRows, paymentRows, appliedCoupons, availableCoupons, transfers, centers] =
     await Promise.all([
       listAttendanceForReader(reader.id),
       getBillingBreakdown(reader.id),
@@ -61,6 +61,7 @@ export default async function ReaderProfilePage({
       listCouponsForReader(reader.id),
       listCoupons(),
       listTransfersForReader(reader.id),
+      listAssignableCentersWithPocs(),
     ]);
 
   return (
@@ -69,6 +70,7 @@ export default async function ReaderProfilePage({
         reader={reader}
         transfers={transfers}
         isAdmin={isAdmin}
+        centers={centers}
         actions={
           <>
             {!currentUser?.suspended && <SendReminderButton readerId={reader.id} />}
@@ -77,6 +79,7 @@ export default async function ReaderProfilePage({
                 readerId={reader.id}
                 outstandingBalance={amountDue.toFixed(2)}
                 coupons={availableCoupons}
+                billingBreakdown={billingBreakdown}
               />
             )}
             {isAdmin && (

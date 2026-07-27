@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useCallback, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import {
   generatePaymentLinkAction,
@@ -17,6 +17,13 @@ import { QrCode } from "@/components/ui/qr-code";
 
 type Coupon = { id: number; code: string; discountAmount: string };
 
+type BillingBreakdown = {
+  previousOutstanding: number;
+  currentMonthUnbilled: number;
+  isClosedCurrentMonth: boolean;
+  byPeriod: { billingPeriod: string; amount: number }[];
+};
+
 function defaultMonthBounds() {
   const now = new Date();
   const start = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1)).toISOString().slice(0, 10);
@@ -28,10 +35,12 @@ export function SendPaymentLinkButton({
   readerId,
   outstandingBalance,
   coupons,
+  billingBreakdown,
 }: {
   readerId: number;
   outstandingBalance: string;
   coupons: Coupon[];
+  billingBreakdown?: BillingBreakdown;
 }) {
   const router = useRouter();
   const [generatePending, startGenerateTransition] = useTransition();
@@ -58,8 +67,51 @@ export function SendPaymentLinkButton({
     setResult(null);
   }
 
+  const setMonthSelection = useCallback((type: "previous" | "current" | "all") => {
+    if (!billingBreakdown) return;
+    const now = new Date();
+    if (type === "current") {
+      setAmount(Math.max(0, billingBreakdown.currentMonthUnbilled).toFixed(2));
+      setStartDate(new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1)).toISOString().slice(0, 10));
+      setEndDate(new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() + 1, 0)).toISOString().slice(0, 10));
+    } else if (type === "previous") {
+      setAmount(Math.max(0, billingBreakdown.previousOutstanding).toFixed(2));
+      const periods = billingBreakdown.byPeriod.filter((p) => p.billingPeriod && p.billingPeriod !== now.toISOString().slice(0, 7));
+      if (periods.length > 0) {
+        const earliest = periods[periods.length - 1].billingPeriod;
+        const latest = periods[0].billingPeriod;
+        setStartDate(`${earliest}-01`);
+        const [y, m] = latest.split("-").map(Number);
+        const lastDay = new Date(Date.UTC(y, m, 0)).toISOString().slice(0, 10);
+        setEndDate(lastDay);
+      }
+    } else {
+      setAmount(outstandingBalance);
+      setStartDate(new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1)).toISOString().slice(0, 10));
+      setEndDate(new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() + 1, 0)).toISOString().slice(0, 10));
+    }
+    invalidateGeneratedLink();
+  }, [billingBreakdown, outstandingBalance]);
+
   return (
     <div className="flex flex-col gap-2 sm:items-end">
+      {billingBreakdown && (
+        <div className="flex flex-wrap gap-1.5">
+          {billingBreakdown.previousOutstanding > 0 && (
+            <Button type="button" variant="outline" size="xs" onClick={() => setMonthSelection("previous")}>
+              Prev: ₹{billingBreakdown.previousOutstanding.toFixed(0)}
+            </Button>
+          )}
+          {billingBreakdown.currentMonthUnbilled > 0 && (
+            <Button type="button" variant="outline" size="xs" onClick={() => setMonthSelection("current")}>
+              Current: ₹{billingBreakdown.currentMonthUnbilled.toFixed(0)}
+            </Button>
+          )}
+          <Button type="button" variant="outline" size="xs" onClick={() => setMonthSelection("all")}>
+            All: ₹{Number(outstandingBalance).toFixed(0)}
+          </Button>
+        </div>
+      )}
       <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:flex-wrap">
         <Input
           type="number"

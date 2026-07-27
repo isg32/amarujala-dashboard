@@ -18,6 +18,7 @@ export const readerEditSchema = z.object({
   landmark,
   subscriptionStartDate,
   status: z.enum(["active", "inactive"]),
+  assignedPocId: z.string().optional().or(z.literal("")).transform((v) => v || undefined),
 });
 export type ReaderEditInput = z.infer<typeof readerEditSchema>;
 

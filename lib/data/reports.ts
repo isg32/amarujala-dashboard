@@ -345,6 +345,43 @@ export async function getCreditNoteReport(filters: GroupedReportFilters = {}) {
   return rows;
 }
 
+export async function getDetailedLedgerReport(filters: GroupedReportFilters = {}) {
+  const user = await requireAppUser();
+  const scope = scopeCondition(user);
+  const centerFilter = filters.centerId ? eq(readers.centerId, filters.centerId) : undefined;
+
+  const rows = await db
+    .select({
+      entryDate: readerBillingLedger.entryDate,
+      readerId: readers.id,
+      readerName: readers.name,
+      readerCode: readers.readerCode,
+      centerName: centers.name,
+      cityName: cities.name,
+      pocName: appUsers.name,
+      entryType: readerBillingLedger.entryType,
+      amount: readerBillingLedger.amount,
+      billingPeriod: readerBillingLedger.billingPeriod,
+      description: readerBillingLedger.description,
+      createdAt: readerBillingLedger.createdAt,
+    })
+    .from(readerBillingLedger)
+    .innerJoin(readers, eq(readerBillingLedger.readerId, readers.id))
+    .innerJoin(centers, eq(readers.centerId, centers.id))
+    .innerJoin(cities, eq(centers.cityId, cities.id))
+    .leftJoin(appUsers, eq(readers.assignedPocId, appUsers.id))
+    .where(
+      and(
+        scope,
+        centerFilter,
+        filters.dateFrom ? gte(readerBillingLedger.entryDate, filters.dateFrom) : undefined,
+        filters.dateTo ? lte(readerBillingLedger.entryDate, filters.dateTo) : undefined
+      )
+    )
+    .orderBy(desc(readerBillingLedger.createdAt));
+  return rows;
+}
+
 export async function getCouponReport(filters: GroupedReportFilters = {}) {
   const user = await requireAppUser();
   const scope = scopeCondition(user);

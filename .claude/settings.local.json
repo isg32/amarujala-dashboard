@@ -1,0 +1,26 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(npx tsc *)",
+      "Bash(npx eslint *)",
+      "Bash(npm run *)",
+      "Bash(npx drizzle-kit *)",
+      "Bash(node *)",
+      "Bash(npx shadcn@latest add textarea --yes)",
+      "Bash(git add *)",
+      "Bash(git commit *)",
+      "Bash(git push *)",
+      "Bash(pkill -f \"next dev\")",
+      "Bash(sed -i 's|render={<Link href=\"/coupons/usage\" />}|render={<Link href=\"/coupons/usage\" prefetch={false} />}|' \"app/\\(dashboard\\)/coupons/page.tsx\")",
+      "Bash(sed -i 's|render={<Link href=\"/coupons\" />}|render={<Link href=\"/coupons\" prefetch={false} />}|; s|<Link href={`/readers/${u.readerId}`} className=\"hover:underline\">|<Link href={`/readers/${u.readerId}`} prefetch={false} className=\"hover:underline\">|' \"app/\\(dashboard\\)/coupons/usage/page.tsx\")",
+      "Bash(sed -i 's|render={<Link href={`/readers/${reader.id}/transfer`} />}|render={<Link href={`/readers/${reader.id}/transfer`} prefetch={false} />}|' \"app/\\(dashboard\\)/readers/[id]/page.tsx\")",
+      "Bash(sed -i 's|render={<Link href=\"/readers/bulk-upload\" />}|render={<Link href=\"/readers/bulk-upload\" prefetch={false} />}|; s|render={<Link href=\"/readers/new\" />}|render={<Link href=\"/readers/new\" prefetch={false} />}|' \"app/\\(dashboard\\)/readers/page.tsx\")",
+      "Bash(sed -i 's|render={<Link href=\"/payments/history\" />}|render={<Link href=\"/payments/history\" prefetch={false} />}|; s|<Link href={`/readers/${t.readerId}`} className=\"hover:underline\">|<Link href={`/readers/${t.readerId}`} prefetch={false} className=\"hover:underline\">|' \"app/\\(dashboard\\)/payments/page.tsx\")",
+      "Bash(xargs -I{} sh -c 'echo === {} ===; cat -n {}')",
+      "Bash(mkdir -p /tmp/claude-1000/-home-isg32-dev-websites-Amarujala-dashboard/7c170bfa-aaf8-4873-aef3-9a1b4797264f/scratchpad/backup_inspect)",
+      "Bash(unzip -l ~/Downloads/amarujala_backup_jul8.zip)",
+      "Bash(unzip -o ~/Downloads/amarujala_backup_jul8.zip -d .)",
+      "Bash(sqlite3 data.db \".tables\")"
+    ]
+  }
+}

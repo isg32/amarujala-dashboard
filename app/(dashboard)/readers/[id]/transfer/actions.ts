@@ -8,7 +8,8 @@ export async function transferReaderAction(formData: FormData) {
   const readerId = z.coerce.number().int().positive().parse(formData.get("readerId"));
   const toCenterId = z.coerce.number().int().positive().parse(formData.get("toCenterId"));
   const remarks = z.string().trim().optional().parse(formData.get("remarks") || undefined);
+  const assignedPocId = z.string().optional().parse(formData.get("assignedPocId") || undefined);
 
-  await transferReader(readerId, toCenterId, remarks);
+  await transferReader(readerId, toCenterId, remarks, assignedPocId);
   redirect(`/readers/${readerId}`);
 }

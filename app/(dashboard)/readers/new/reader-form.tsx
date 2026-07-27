@@ -13,7 +13,8 @@ type Center = { id: number; name: string; cityName: string; pocs: { id: string; 
 const initialState: CreateReaderState = null;
 
 export function ReaderForm({ centers }: { centers: Center[] }) {
-  const [centerId, setCenterId] = useState<string>("");
+  const singleCenter = centers.length === 1 ? String(centers[0].id) : "";
+  const [centerId, setCenterId] = useState<string>(singleCenter);
   const [state, formAction, pending] = useActionState(createReaderAction, initialState);
   const pocOptions = useMemo(
     () => centers.find((c) => String(c.id) === centerId)?.pocs ?? [],
@@ -45,47 +46,62 @@ export function ReaderForm({ centers }: { centers: Center[] }) {
         </Field>
         <Field>
           <FieldLabel htmlFor="centerId">Center</FieldLabel>
-          <Select
-            name="centerId"
-            required
-            value={centerId}
-            onValueChange={(v) => setCenterId(typeof v === "string" ? v : "")}
-            items={Object.fromEntries(centers.map((c) => [String(c.id), `${c.name} (${c.cityName})`]))}
-          >
-            <SelectTrigger id="centerId" className="w-full">
-              <SelectValue placeholder="Select a center" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectGroup>
-                {centers.map((center) => (
-                  <SelectItem key={center.id} value={String(center.id)}>
-                    {center.name} ({center.cityName})
-                  </SelectItem>
-                ))}
-              </SelectGroup>
-            </SelectContent>
-          </Select>
+          {centers.length === 1 ? (
+            <>
+              <input type="hidden" name="centerId" value={singleCenter} />
+              <div className="rounded-md border border-input px-2.5 py-1.5 text-sm">{centers[0].name} ({centers[0].cityName})</div>
+            </>
+          ) : (
+            <Select
+              name="centerId"
+              required
+              value={centerId}
+              onValueChange={(v) => setCenterId(typeof v === "string" ? v : "")}
+              items={Object.fromEntries(centers.map((c) => [String(c.id), `${c.name} (${c.cityName})`]))}
+            >
+              <SelectTrigger id="centerId" className="w-full">
+                <SelectValue placeholder="Select a center" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectGroup>
+                  {centers.map((center) => (
+                    <SelectItem key={center.id} value={String(center.id)}>
+                      {center.name} ({center.cityName})
+                    </SelectItem>
+                  ))}
+                </SelectGroup>
+              </SelectContent>
+            </Select>
+          )}
         </Field>
         <Field>
           <FieldLabel htmlFor="assignedPocId">Assigned POC (optional)</FieldLabel>
-          <Select
-            name="assignedPocId"
-            disabled={pocOptions.length === 0}
-            items={Object.fromEntries(pocOptions.map((poc) => [poc.id, poc.name]))}
-          >
-            <SelectTrigger id="assignedPocId" className="w-full">
-              <SelectValue placeholder={pocOptions.length === 0 ? "No POC for this center" : "Select a POC"} />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectGroup>
-                {pocOptions.map((poc) => (
-                  <SelectItem key={poc.id} value={poc.id}>
-                    {poc.name}
-                  </SelectItem>
-                ))}
-              </SelectGroup>
-            </SelectContent>
-          </Select>
+          {pocOptions.length <= 1 ? (
+            <>
+              {pocOptions.length === 1 && <input type="hidden" name="assignedPocId" value={pocOptions[0].id} />}
+              <div className="rounded-md border border-input px-2.5 py-1.5 text-sm text-muted-foreground">
+                {pocOptions.length === 1 ? pocOptions[0].name : "No POC for this center"}
+              </div>
+            </>
+          ) : (
+            <Select
+              name="assignedPocId"
+              items={Object.fromEntries(pocOptions.map((poc) => [poc.id, poc.name]))}
+            >
+              <SelectTrigger id="assignedPocId" className="w-full">
+                <SelectValue placeholder="Select a POC" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectGroup>
+                  {pocOptions.map((poc) => (
+                    <SelectItem key={poc.id} value={poc.id}>
+                      {poc.name}
+                    </SelectItem>
+                  ))}
+                </SelectGroup>
+              </SelectContent>
+            </Select>
+          )}
         </Field>
         <Field>
           <FieldLabel htmlFor="subscriptionStartDate">Subscription start date</FieldLabel>
