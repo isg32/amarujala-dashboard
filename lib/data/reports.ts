@@ -350,99 +350,131 @@ export async function getDetailedLedgerReport(filters: GroupedReportFilters = {}
   const scope = scopeCondition(user);
   const centerFilter = filters.centerId ? eq(readers.centerId, filters.centerId) : undefined;
 
-  const rows = await db
+  const dateFrom = filters.dateFrom;
+  const dateTo = filters.dateTo;
+
+  // Aggregate ledger entries by (readerId, billingPeriod)
+  const aggConditions = [
+    scope,
+    centerFilter,
+    dateFrom ? gte(readerBillingLedger.entryDate, dateFrom) : undefined,
+    dateTo ? lte(readerBillingLedger.entryDate, dateTo) : undefined,
+  ];
+
+  const ledgerGrouped = await db
     .select({
-      entryDate: readerBillingLedger.entryDate,
       readerId: readers.id,
       readerName: readers.name,
       readerCode: readers.readerCode,
       centerName: centers.name,
       cityName: cities.name,
       pocName: appUsers.name,
-      entryType: readerBillingLedger.entryType,
-      amount: readerBillingLedger.amount,
       billingPeriod: readerBillingLedger.billingPeriod,
-      description: readerBillingLedger.description,
-      createdAt: readerBillingLedger.createdAt,
+      charges: sqlOp<number>`coalesce(sum(${readerBillingLedger.amount}) filter (where ${readerBillingLedger.entryType} = 'monthly_charge'), 0)`,
+      payments: sqlOp<number>`coalesce(sum(abs(${readerBillingLedger.amount})) filter (where ${readerBillingLedger.entryType} = 'payment'), 0)`,
+      discounts: sqlOp<number>`coalesce(sum(abs(${readerBillingLedger.amount})) filter (where ${readerBillingLedger.entryType} in ('coupon_discount', 'adjustment')), 0)`,
     })
     .from(readerBillingLedger)
     .innerJoin(readers, eq(readerBillingLedger.readerId, readers.id))
     .innerJoin(centers, eq(readers.centerId, centers.id))
     .innerJoin(cities, eq(centers.cityId, cities.id))
     .leftJoin(appUsers, eq(readers.assignedPocId, appUsers.id))
-    .where(
-      and(
-        scope,
-        centerFilter,
-        filters.dateFrom ? gte(readerBillingLedger.entryDate, filters.dateFrom) : undefined,
-        filters.dateTo ? lte(readerBillingLedger.entryDate, filters.dateTo) : undefined
-      )
-    )
-    .orderBy(desc(readerBillingLedger.createdAt));
+    .where(and(...aggConditions.filter((c) => c !== undefined)))
+    .groupBy(readers.id, readers.name, readers.readerCode, centers.name, cities.name, appUsers.name, readerBillingLedger.billingPeriod)
+    .orderBy(desc(readerBillingLedger.billingPeriod));
 
-  // Collect unique (readerId, billingPeriod) pairs to compute attendance stats
-  const periodKeys = new Map<string, { readerId: number; period: string }>();
-  for (const r of rows) {
-    if (r.billingPeriod && !periodKeys.has(`${r.readerId}-${r.billingPeriod}`)) {
-      periodKeys.set(`${r.readerId}-${r.billingPeriod}`, { readerId: r.readerId, period: r.billingPeriod });
+  // Compute attendance per period and financial summary
+  const today = new Date().toISOString().slice(0, 10);
+  const result: {
+    billingPeriod: string;
+    periodStart: string;
+    periodEnd: string;
+    readerId: number;
+    readerName: string;
+    readerCode: string;
+    cityName: string;
+    centerName: string;
+    pocName: string | null;
+    charges: number;
+    paid: number;
+    discountsAndAdjustments: number;
+    due: number;
+    overPaid: number;
+    delivered: number;
+    notDelivered: number;
+    notUpdated: number;
+    notApplicable: number;
+  }[] = [];
+
+  for (const row of ledgerGrouped) {
+    const period = row.billingPeriod ?? "";
+    if (!period) continue;
+
+    const [y, m] = period.split("-").map(Number);
+    const periodStart = `${period}-01`;
+    const periodEnd = new Date(Date.UTC(y, m, 0)).toISOString().slice(0, 10);
+
+    const charges = Number(row.charges);
+    const paid = Number(row.payments);
+    const disc = Number(row.discounts);
+    const net = charges - paid - disc;
+    const due = net > 0 ? net : 0;
+    const overPaid = net < 0 ? Math.abs(net) : 0;
+
+    // Attendance for this period
+    const attRows = await db
+      .select({ status: attendance.status })
+      .from(attendance)
+      .where(
+        and(
+          eq(attendance.readerId, row.readerId),
+          gte(attendance.attendanceDate, periodStart),
+          lte(attendance.attendanceDate, periodEnd)
+        )
+      );
+
+    const delivered = attRows.filter((a) => a.status === "delivered").length;
+    const notDelivered = attRows.filter((a) => a.status === "not_delivered").length;
+
+    const periodStartDate = new Date(periodStart + "T00:00:00Z");
+    const periodEndDate = new Date(periodEnd + "T00:00:00Z");
+    const todayDate = new Date(today + "T00:00:00Z");
+    const effectiveEnd = todayDate < periodEndDate ? todayDate : periodEndDate;
+
+    let totalDaysSoFar = 0;
+    const cursor = new Date(periodStartDate);
+    while (cursor <= effectiveEnd) {
+      totalDaysSoFar++;
+      cursor.setUTCDate(cursor.getUTCDate() + 1);
     }
+
+    const notUpdated = Math.max(0, totalDaysSoFar - delivered - notDelivered);
+    const totalDaysInPeriod = Math.round((periodEndDate.getTime() - periodStartDate.getTime()) / 86400000) + 1;
+    const notApplicable = Math.max(0, totalDaysInPeriod - totalDaysSoFar);
+
+    result.push({
+      billingPeriod: period,
+      periodStart,
+      periodEnd,
+      readerId: row.readerId,
+      readerName: row.readerName,
+      readerCode: row.readerCode,
+      cityName: row.cityName,
+      centerName: row.centerName,
+      pocName: row.pocName,
+      charges,
+      paid,
+      discountsAndAdjustments: disc,
+      due,
+      overPaid,
+      delivered,
+      notDelivered,
+      notUpdated,
+      notApplicable,
+    });
   }
 
-  const attendanceByKey = new Map<string, { delivered: number; notDelivered: number; notUpdated: number; notApplicable: number }>();
-
-  if (periodKeys.size > 0) {
-    // Fetch attendance for all unique reader+period combinations
-    const today = new Date().toISOString().slice(0, 10);
-    for (const { readerId, period } of periodKeys.values()) {
-      const periodStart = `${period}-01`;
-      const [y, m] = period.split("-").map(Number);
-      const periodEnd = new Date(Date.UTC(y, m, 0)).toISOString().slice(0, 10);
-
-      const attRows = await db
-        .select({ status: attendance.status, attendanceDate: attendance.attendanceDate })
-        .from(attendance)
-        .where(
-          and(
-            eq(attendance.readerId, readerId),
-            gte(attendance.attendanceDate, periodStart),
-            lte(attendance.attendanceDate, periodEnd)
-          )
-        );
-
-      const delivered = attRows.filter((a) => a.status === "delivered").length;
-      const notDelivered = attRows.filter((a) => a.status === "not_delivered").length;
-
-      // Total days in the period up to today
-      const periodStartDate = new Date(periodStart + "T00:00:00Z");
-      const periodEndDate = new Date(periodEnd + "T00:00:00Z");
-      const todayDate = new Date(today + "T00:00:00Z");
-      const effectiveEnd = todayDate < periodEndDate ? todayDate : periodEndDate;
-
-      let totalDaysSoFar = 0;
-      const cursor = new Date(periodStartDate);
-      while (cursor <= effectiveEnd) {
-        totalDaysSoFar++;
-        cursor.setUTCDate(cursor.getUTCDate() + 1);
-      }
-
-      const notUpdated = totalDaysSoFar - delivered - notDelivered;
-      const totalDaysInPeriod = Math.round((periodEndDate.getTime() - periodStartDate.getTime()) / 86400000) + 1;
-      const notApplicable = totalDaysInPeriod - totalDaysSoFar;
-
-      attendanceByKey.set(`${readerId}-${period}`, { delivered, notDelivered, notUpdated, notApplicable });
-    }
-  }
-
-  return rows.map((r) => {
-    const att = r.billingPeriod ? attendanceByKey.get(`${r.readerId}-${r.billingPeriod}`) : undefined;
-    return {
-      ...r,
-      delivered: att?.delivered ?? 0,
-      notDelivered: att?.notDelivered ?? 0,
-      notUpdated: att?.notUpdated ?? 0,
-      notApplicable: att?.notApplicable ?? 0,
-    };
-  });
+  return result;
 }
 
 export async function getCouponReport(filters: GroupedReportFilters = {}) {

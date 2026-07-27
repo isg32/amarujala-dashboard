@@ -153,19 +153,21 @@ export async function GET(request: Request, { params }: { params: Promise<{ type
       const dateTo = searchParams.get("dateTo") || new Date().toISOString().slice(0, 10);
       const data = await getDetailedLedgerReport({ centerId, dateFrom, dateTo });
       rows = data.map((r) => ({
-        Date: r.entryDate,
+        Period: `${r.periodStart} to ${r.periodEnd}`,
         Reader: r.readerName,
+        "Reader Code": r.readerCode,
         City: r.cityName,
         Center: r.centerName,
         POC: r.pocName ?? "—",
-        Type: r.entryType === "monthly_charge" ? "Charge" : r.entryType === "coupon_discount" ? "Coupon" : r.entryType === "payment" ? "Payment" : r.entryType === "adjustment" ? "Adjustment" : r.entryType,
-        Period: r.billingPeriod ?? "",
-        Amount: Number(r.amount).toFixed(2),
+        Charges: r.charges,
+        Paid: r.paid,
+        "Discounts & Adjustments": r.discountsAndAdjustments,
+        Due: r.due,
+        "Over Paid": r.overPaid,
         Delivered: r.delivered,
         "Not Delivered": r.notDelivered,
         "Not Updated": r.notUpdated,
-        "N/A": r.notApplicable,
-        Description: r.description ?? "",
+        "Not Applicable": r.notApplicable,
       }));
       break;
     }

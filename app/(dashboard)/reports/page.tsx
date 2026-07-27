@@ -377,39 +377,39 @@ async function ReportTable({
         <ReportCard>
           <TableHeader>
             <TableRow>
-              <TableHead>Date</TableHead>
+              <TableHead>Period</TableHead>
               <TableHead>Reader</TableHead>
               <TableHead>City</TableHead>
               <TableHead>Center</TableHead>
               <TableHead>POC</TableHead>
-              <TableHead>Type</TableHead>
-              <TableHead>Period</TableHead>
-              <TableHead>Amount</TableHead>
-              <TableHead>Del.</TableHead>
-              <TableHead>Not Del.</TableHead>
-              <TableHead>Not Upd.</TableHead>
-              <TableHead>N/A</TableHead>
-              <TableHead>Description</TableHead>
+              <TableHead>Charges</TableHead>
+              <TableHead>Paid</TableHead>
+              <TableHead>Discount</TableHead>
+              <TableHead>Due</TableHead>
+              <TableHead>Over Paid</TableHead>
+              <TableHead>Delivered</TableHead>
+              <TableHead>Not Delivered</TableHead>
+              <TableHead>Not Updated</TableHead>
+              <TableHead>Not Applicable</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
             {rows.map((r, i) => (
               <TableRow key={i}>
-                <TableCell className="whitespace-nowrap text-xs">{r.entryDate}</TableCell>
-                <TableCell><Link href={`/readers/${r.readerId}`} className="hover:underline">{r.readerName}</Link></TableCell>
+                <TableCell className="whitespace-nowrap text-xs">{r.periodStart} to {r.periodEnd}</TableCell>
+                <TableCell><Link href={`/readers/${r.readerId}`} className="hover:underline">{r.readerName}</Link> <span className="text-xs text-muted-foreground">({r.readerCode})</span></TableCell>
                 <TableCell>{r.cityName}</TableCell>
                 <TableCell>{r.centerName}</TableCell>
                 <TableCell>{r.pocName ?? "—"}</TableCell>
-                <TableCell>{r.entryType === "monthly_charge" ? "Charge" : r.entryType === "coupon_discount" ? "Coupon" : r.entryType === "payment" ? "Payment" : r.entryType === "adjustment" ? "Adjustment" : r.entryType}</TableCell>
-                <TableCell className="text-xs text-muted-foreground">{r.billingPeriod ?? "—"}</TableCell>
-                <TableCell className={Number(r.amount) < 0 ? "text-green-600 dark:text-green-400" : ""}>
-                  ₹{Math.abs(Number(r.amount)).toFixed(2)}
-                </TableCell>
-                <TableCell className="text-xs">{r.delivered}</TableCell>
-                <TableCell className="text-xs text-destructive">{r.notDelivered > 0 ? r.notDelivered : "—"}</TableCell>
-                <TableCell className="text-xs text-amber-600 dark:text-amber-400">{r.notUpdated > 0 ? r.notUpdated : "—"}</TableCell>
-                <TableCell className="text-xs text-muted-foreground">{r.notApplicable > 0 ? r.notApplicable : "—"}</TableCell>
-                <TableCell className="max-w-48 truncate text-xs text-muted-foreground">{r.description ?? "—"}</TableCell>
+                <TableCell>₹{r.charges.toFixed(2)}</TableCell>
+                <TableCell className="text-green-600 dark:text-green-400">₹{r.paid.toFixed(2)}</TableCell>
+                <TableCell>₹{r.discountsAndAdjustments.toFixed(2)}</TableCell>
+                <TableCell className={r.due > 0 ? "text-destructive font-medium" : ""}>₹{r.due.toFixed(2)}</TableCell>
+                <TableCell className="text-green-600 dark:text-green-400">{r.overPaid > 0 ? `₹${r.overPaid.toFixed(2)}` : "—"}</TableCell>
+                <TableCell>{r.delivered}</TableCell>
+                <TableCell className="text-destructive">{r.notDelivered > 0 ? r.notDelivered : "—"}</TableCell>
+                <TableCell className="text-amber-600 dark:text-amber-400">{r.notUpdated > 0 ? r.notUpdated : "—"}</TableCell>
+                <TableCell className="text-muted-foreground">{r.notApplicable > 0 ? r.notApplicable : "—"}</TableCell>
               </TableRow>
             ))}
           </TableBody>
