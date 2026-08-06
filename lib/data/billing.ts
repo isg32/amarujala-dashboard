@@ -320,6 +320,167 @@ export async function getBillingBreakdown(readerId: number) {
   };
 }
 
+export type ReaderMonthlyLedgerRow = {
+  billingPeriod: string;
+  periodStart: string;
+  periodEnd: string;
+  isCurrentOpen: boolean;
+  charges: number;
+  paid: number;
+  discounts: number;
+  // net = charges - paid - discounts. due = underpaid (net positive),
+  // credit = overpaid (net negative, shown as a positive amount).
+  due: number;
+  credit: number;
+  delivered: number;
+  notDelivered: number;
+  notUpdated: number;
+  notApplicable: number;
+};
+
+function periodDateRange(billingPeriod: string): { periodStart: string; periodEnd: string } {
+  const [y, m] = billingPeriod.split("-").map(Number);
+  const periodStart = `${billingPeriod}-01`;
+  const periodEnd = new Date(Date.UTC(y, m, 0)).toISOString().slice(0, 10);
+  return { periodStart, periodEnd };
+}
+
+async function getAttendanceCountsForPeriod(
+  readerId: number,
+  periodStart: string,
+  periodEnd: string,
+  today: string
+): Promise<{ delivered: number; notDelivered: number; notUpdated: number; notApplicable: number }> {
+  const rows = await db
+    .select({ status: attendance.status })
+    .from(attendance)
+    .where(
+      and(eq(attendance.readerId, readerId), gte(attendance.attendanceDate, periodStart), lte(attendance.attendanceDate, periodEnd))
+    );
+
+  const delivered = rows.filter((a) => a.status === "delivered").length;
+  const notDelivered = rows.filter((a) => a.status === "not_delivered").length;
+
+  const periodStartDate = new Date(periodStart + "T00:00:00Z");
+  const periodEndDate = new Date(periodEnd + "T00:00:00Z");
+  const todayDate = new Date(today + "T00:00:00Z");
+  const effectiveEnd = todayDate < periodEndDate ? todayDate : periodEndDate;
+
+  let totalDaysSoFar = 0;
+  const cursor = new Date(periodStartDate);
+  while (cursor <= effectiveEnd) {
+    totalDaysSoFar++;
+    cursor.setUTCDate(cursor.getUTCDate() + 1);
+  }
+
+  const notUpdated = Math.max(0, totalDaysSoFar - delivered - notDelivered);
+  const totalDaysInPeriod = Math.round((periodEndDate.getTime() - periodStartDate.getTime()) / 86400000) + 1;
+  const notApplicable = Math.max(0, totalDaysInPeriod - totalDaysSoFar);
+
+  return { delivered, notDelivered, notUpdated, notApplicable };
+}
+
+// Per-period ledger summary for ONE reader — the money rows behind the
+// Reader Ledger page. Includes every period that has ledger entries (closed
+// periods) plus the currently open period with its live provisional charge,
+// so "amount paid each month / overpaid / underpaid" is always answerable
+// even before a Close Month has been run.
+export async function getReaderMonthlyLedger(readerId: number): Promise<ReaderMonthlyLedgerRow[]> {
+  const user = await requireAppUser();
+  const context = await getReaderBillingContext(readerId);
+  assertCenterInScope(user, context.centerId);
+
+  const today = new Date().toISOString().slice(0, 10);
+
+  const ledgerGrouped = await db
+    .select({
+      billingPeriod: readerBillingLedger.billingPeriod,
+      charges: sql<number>`coalesce(sum(${readerBillingLedger.amount}) filter (where ${readerBillingLedger.entryType} = 'monthly_charge'), 0)`,
+      payments: sql<number>`coalesce(sum(abs(${readerBillingLedger.amount})) filter (where ${readerBillingLedger.entryType} = 'payment'), 0)`,
+      discounts: sql<number>`coalesce(sum(abs(${readerBillingLedger.amount})) filter (where ${readerBillingLedger.entryType} in ('coupon_discount', 'adjustment')), 0)`,
+    })
+    .from(readerBillingLedger)
+    .where(eq(readerBillingLedger.readerId, readerId))
+    .groupBy(readerBillingLedger.billingPeriod)
+    .orderBy(desc(readerBillingLedger.billingPeriod));
+
+  const { cycleStart, cycleEnd, billingPeriod: currentPeriod } = currentCycleFor(context.billingAnchorDay, today);
+  const currentPeriodRows = ledgerGrouped.filter((r) => r.billingPeriod === currentPeriod);
+  const closedPeriods = ledgerGrouped.filter((r) => r.billingPeriod !== currentPeriod);
+
+  const isCurrentClosed = context.status === "inactive" && currentPeriodRows.length > 0;
+
+  const rows: ReaderMonthlyLedgerRow[] = [];
+
+  for (const group of closedPeriods) {
+    const period = group.billingPeriod!;
+    const { periodStart, periodEnd } = periodDateRange(period);
+    const counts = await getAttendanceCountsForPeriod(readerId, periodStart, periodEnd, today);
+
+    const charges = Number(group.charges);
+    const paid = Number(group.payments);
+    const discounts = Number(group.discounts);
+    const net = charges - paid - discounts;
+
+    rows.push({
+      billingPeriod: period,
+      periodStart,
+      periodEnd,
+      isCurrentOpen: false,
+      charges: Math.round(charges * 100) / 100,
+      paid: Math.round(paid * 100) / 100,
+      discounts: Math.round(discounts * 100) / 100,
+      due: net > 0 ? Math.round(net * 100) / 100 : 0,
+      credit: net < 0 ? Math.round(Math.abs(net) * 100) / 100 : 0,
+      ...counts,
+    });
+  }
+
+  // Current (open) period — provisional charge unless the subscription is
+  // closed for it, attendance counted live through today.
+  const periodStart = cycleStart;
+  const periodEnd = cycleEnd;
+  const counts = await getAttendanceCountsForPeriod(readerId, periodStart, periodEnd, today);
+
+  let charges = currentPeriodRows.length > 0 ? Number(currentPeriodRows[0].charges) : 0;
+  if (!isCurrentClosed) {
+    const [pricingHistory, attendanceMap, overrides] = await Promise.all([
+      getCityPricingHistory(context.cityId),
+      getAttendanceMap(readerId, periodStart, today),
+      getPriceOverridesFor(context.centerId, context.unitId),
+    ]);
+    charges = calculateCycleCharge({
+      cycleStart,
+      cycleEnd,
+      subscriptionStartDate: context.subscriptionStartDate,
+      attendance: attendanceMap,
+      pricingHistory,
+      today,
+      unmarkedDefault: unmarkedDefaultFor(periodStart),
+      ...overrides,
+    });
+  }
+
+  const paid = currentPeriodRows.length > 0 ? Number(currentPeriodRows[0].payments) : 0;
+  const discounts = currentPeriodRows.length > 0 ? Number(currentPeriodRows[0].discounts) : 0;
+  const net = charges - paid - discounts;
+
+  rows.push({
+    billingPeriod: currentPeriod,
+    periodStart,
+    periodEnd,
+    isCurrentOpen: !isCurrentClosed,
+    charges: Math.round(charges * 100) / 100,
+    paid: Math.round(paid * 100) / 100,
+    discounts: Math.round(discounts * 100) / 100,
+    due: net > 0 ? Math.round(net * 100) / 100 : 0,
+    credit: net < 0 ? Math.round(Math.abs(net) * 100) / 100 : 0,
+    ...counts,
+  });
+
+  return rows;
+}
+
 export interface CloseSubscriptionResult {
   billingPeriod: string;
   amount: number;

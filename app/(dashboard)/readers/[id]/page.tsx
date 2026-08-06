@@ -73,6 +73,14 @@ export default async function ReaderProfilePage({
         centers={centers}
         actions={
           <>
+            <Button
+              variant="outline"
+              size="sm"
+              render={<Link href={`/readers/${reader.id}/ledger`} prefetch={false} />}
+              nativeButton={false}
+            >
+              View Ledger
+            </Button>
             {!currentUser?.suspended && <SendReminderButton readerId={reader.id} />}
             {!currentUser?.suspended && (
               <SendPaymentLinkButton

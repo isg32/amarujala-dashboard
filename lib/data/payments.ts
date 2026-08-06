@@ -3,7 +3,7 @@ import { randomBytes } from "crypto";
 import { and, desc, eq, gte, ilike, inArray, lte, or, sql } from "drizzle-orm";
 import { requireAdmin, requireAppUser, type AppUser } from "@/lib/auth/session";
 import { db } from "@/lib/db";
-import { payments, readers, centers, cities, paymentIntents, coupons } from "@/lib/db/schema";
+import { payments, readers, centers, cities, paymentIntents, coupons, appUsers } from "@/lib/db/schema";
 import { assertCenterInScope } from "./readers";
 import { postLedgerEntry } from "@/lib/billing/ledger";
 import { PAYU_GATEWAY_ENABLED } from "@/lib/payu/config";
@@ -287,8 +287,23 @@ export async function listPaymentsForReader(readerId: number) {
   assertCenterInScope(user, reader.centerId);
 
   return db
-    .select()
+    .select({
+      id: payments.id,
+      readerId: payments.readerId,
+      amount: payments.amount,
+      method: payments.method,
+      methodOtherLabel: payments.methodOtherLabel,
+      transactionReference: payments.transactionReference,
+      remarks: payments.remarks,
+      paymentDate: payments.paymentDate,
+      recordedBy: payments.recordedBy,
+      recordedByName: appUsers.name,
+      reversed: payments.reversed,
+      inProcess: payments.inProcess,
+      createdAt: payments.createdAt,
+    })
     .from(payments)
+    .leftJoin(appUsers, eq(payments.recordedBy, appUsers.id))
     .where(eq(payments.readerId, readerId))
     .orderBy(desc(payments.paymentDate), desc(payments.id));
 }
@@ -378,6 +393,41 @@ export async function listPaymentIntents(filters: PaymentIntentFilters = {}) {
     .innerJoin(readers, eq(paymentIntents.readerId, readers.id))
     .innerJoin(centers, eq(readers.centerId, centers.id))
     .where(conditions.length > 0 ? and(...conditions) : undefined)
+    .orderBy(desc(paymentIntents.createdAt));
+
+  const successTxnIds = rows.filter((r) => r.status === "success").map((r) => r.txnId);
+  const paymentRows =
+    successTxnIds.length > 0
+      ? await db
+          .select({ id: payments.id, transactionReference: payments.transactionReference, reversed: payments.reversed })
+          .from(payments)
+          .where(inArray(payments.transactionReference, successTxnIds))
+      : [];
+  const paymentByTxnId = new Map(paymentRows.map((p) => [p.transactionReference, { id: p.id, reversed: p.reversed }]));
+
+  return rows.map((r) => ({ ...r, payment: paymentByTxnId.get(r.txnId) ?? null }));
+}
+
+// Payment links sent to a single reader — shown on the Reader Ledger page.
+// Like listPaymentIntents this is scoped so a reader can only be viewed by
+// someone with access to their Center; the caller gates it to admins.
+export async function listPaymentIntentsForReader(readerId: number) {
+  const user = await requireAppUser();
+  const [reader] = await db.select({ centerId: readers.centerId }).from(readers).where(eq(readers.id, readerId));
+  if (!reader) throw new Error("Reader not found.");
+  assertCenterInScope(user, reader.centerId);
+
+  const rows = await db
+    .select({
+      id: paymentIntents.id,
+      txnId: paymentIntents.txnId,
+      amount: paymentIntents.amount,
+      status: paymentIntents.status,
+      createdAt: paymentIntents.createdAt,
+      paidAt: paymentIntents.paidAt,
+    })
+    .from(paymentIntents)
+    .where(eq(paymentIntents.readerId, readerId))
     .orderBy(desc(paymentIntents.createdAt));
 
   const successTxnIds = rows.filter((r) => r.status === "success").map((r) => r.txnId);
