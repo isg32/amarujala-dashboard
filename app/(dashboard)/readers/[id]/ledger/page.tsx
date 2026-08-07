@@ -172,7 +172,9 @@ export default async function ReaderLedgerPage({ params }: { params: Promise<{ i
                           <Badge variant="outline" className="ml-2 text-xs">Open</Badge>
                         )}
                       </TableCell>
-                      <TableCell className="whitespace-nowrap text-xs text-muted-foreground">{r.periodStart} → {r.periodEnd}</TableCell>
+                      <TableCell className="whitespace-nowrap text-xs text-muted-foreground">
+                        {r.billingPeriod === "Uncategorized" ? "—" : `${r.periodStart} → ${r.periodEnd}`}
+                      </TableCell>
                       <TableCell>{currency(r.charges)}</TableCell>
                       <TableCell className="text-green-600 dark:text-green-400">{currency(r.paid)}</TableCell>
                       <TableCell>{currency(r.discounts)}</TableCell>

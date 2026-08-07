@@ -405,12 +405,40 @@ export async function getReaderMonthlyLedger(readerId: number): Promise<ReaderMo
     .orderBy(desc(readerBillingLedger.billingPeriod));
 
   const { cycleStart, cycleEnd, billingPeriod: currentPeriod } = currentCycleFor(context.billingAnchorDay, today);
+  // Some ledger entries (a payment, an adjustment) can carry a NULL
+  // billing_period — they were never tied to a specific month. Keep them
+  // out of the per-period loop (periodDateRange can't handle a null month)
+  // and surface them as a single "Uncategorized" row so the money doesn't
+  // silently vanish from the totals.
   const currentPeriodRows = ledgerGrouped.filter((r) => r.billingPeriod === currentPeriod);
-  const closedPeriods = ledgerGrouped.filter((r) => r.billingPeriod !== currentPeriod);
+  const closedPeriods = ledgerGrouped.filter((r) => r.billingPeriod !== currentPeriod && r.billingPeriod != null);
+  const nullPeriodGroup = ledgerGrouped.filter((r) => r.billingPeriod == null);
 
   const isCurrentClosed = context.status === "inactive" && currentPeriodRows.length > 0;
 
   const rows: ReaderMonthlyLedgerRow[] = [];
+
+  if (nullPeriodGroup.length > 0) {
+    const charges = nullPeriodGroup.reduce((s, g) => s + Number(g.charges), 0);
+    const paid = nullPeriodGroup.reduce((s, g) => s + Number(g.payments), 0);
+    const discounts = nullPeriodGroup.reduce((s, g) => s + Number(g.discounts), 0);
+    const net = charges - paid - discounts;
+    rows.push({
+      billingPeriod: "Uncategorized",
+      periodStart: "",
+      periodEnd: "",
+      isCurrentOpen: false,
+      charges: Math.round(charges * 100) / 100,
+      paid: Math.round(paid * 100) / 100,
+      discounts: Math.round(discounts * 100) / 100,
+      due: net > 0 ? Math.round(net * 100) / 100 : 0,
+      credit: net < 0 ? Math.round(Math.abs(net) * 100) / 100 : 0,
+      delivered: 0,
+      notDelivered: 0,
+      notUpdated: 0,
+      notApplicable: 0,
+    });
+  }
 
   for (const group of closedPeriods) {
     const period = group.billingPeriod!;
@@ -478,7 +506,14 @@ export async function getReaderMonthlyLedger(readerId: number): Promise<ReaderMo
     ...counts,
   });
 
-  return rows;
+  // Current open period first, then closed periods newest-first, and the
+  // period-less "Uncategorized" bucket at the very bottom.
+  return rows.sort((a, b) => {
+    if (a.isCurrentOpen !== b.isCurrentOpen) return a.isCurrentOpen ? -1 : 1;
+    if (a.billingPeriod === "Uncategorized") return 1;
+    if (b.billingPeriod === "Uncategorized") return -1;
+    return b.billingPeriod.localeCompare(a.billingPeriod);
+  });
 }
 
 export interface CloseSubscriptionResult {
