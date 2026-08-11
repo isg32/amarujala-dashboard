@@ -52,7 +52,7 @@ test("mixed delivered/absent", () => {
   assert.equal(charge, 210); // 21 delivered days * 10/day
 });
 
-test("unmarked days default to delivered", () => {
+test("unmarked days default to not delivered (never billed)", () => {
   const charge = calculateMonthCharge({
     billingPeriod: "2026-07",
     subscriptionStartDate: "2026-01-01",
@@ -60,14 +60,16 @@ test("unmarked days default to delivered", () => {
     pricingHistory: JULY_PRICE,
     today: "2026-08-01",
   });
-  assert.equal(charge, 310);
+  assert.equal(charge, 0);
 });
 
 test("mid-month subscription start bills only from that date", () => {
+  const attendance: Record<string, "delivered" | "not_delivered"> = {};
+  for (let d = 1; d <= 31; d++) attendance[`2026-07-${String(d).padStart(2, "0")}`] = "delivered";
   const charge = calculateMonthCharge({
     billingPeriod: "2026-07",
     subscriptionStartDate: "2026-07-22", // 10 days left in July (22-31)
-    attendance: {},
+    attendance,
     pricingHistory: JULY_PRICE,
     today: "2026-08-01",
   });
@@ -79,11 +81,13 @@ test("mid-month price change is billed per-day, not flat", () => {
     { price: 300, effectiveFrom: "2026-01-01" },
     { price: 320, effectiveFrom: "2026-07-16" },
   ];
+  const attendance: Record<string, "delivered" | "not_delivered"> = {};
+  for (let d = 1; d <= 31; d++) attendance[`2026-07-${String(d).padStart(2, "0")}`] = "delivered";
   // 15 days at 300/31 + 16 days at 320/31
   const charge = calculateMonthCharge({
     billingPeriod: "2026-07",
     subscriptionStartDate: "2026-01-01",
-    attendance: {},
+    attendance,
     pricingHistory,
     today: "2026-08-01",
   });
@@ -92,24 +96,27 @@ test("mid-month price change is billed per-day, not flat", () => {
 });
 
 test("in-progress month only bills up to today, not the full month", () => {
+  const attendance: Record<string, "delivered" | "not_delivered"> = {};
+  for (let d = 1; d <= 9; d++) attendance[`2026-07-${String(d).padStart(2, "0")}`] = "delivered";
   const charge = calculateMonthCharge({
     billingPeriod: "2026-07",
     subscriptionStartDate: "2026-01-01",
-    attendance: {},
+    attendance,
     pricingHistory: JULY_PRICE,
     today: "2026-07-10", // month still in progress
   });
-  // Days 1-9 default in (unmarkedDefault); day 10 is "today" itself and
-  // unmarked, so it's excluded until someone actually marks it — see the
-  // dedicated test below for that behavior in isolation.
+  // Days 1-9 marked delivered; day 10 is "today" itself and unmarked, so it's
+  // excluded until someone actually marks it — see the dedicated test below.
   assert.equal(charge, 90); // 9 days * 10/day
 });
 
-test("today itself is excluded from the live total until marked, even though earlier unmarked days still default in", () => {
+test("today itself is excluded from the live total until marked, even though earlier unmarked days stay unbilled", () => {
+  const attendance: Record<string, "delivered" | "not_delivered"> = {};
+  for (let d = 1; d <= 9; d++) attendance[`2026-07-${String(d).padStart(2, "0")}`] = "delivered";
   const charge = calculateMonthCharge({
     billingPeriod: "2026-07",
     subscriptionStartDate: "2026-01-01",
-    attendance: {},
+    attendance,
     pricingHistory: JULY_PRICE,
     today: "2026-07-10",
   });
@@ -118,7 +125,7 @@ test("today itself is excluded from the live total until marked, even though ear
   const chargeOnceMarked = calculateMonthCharge({
     billingPeriod: "2026-07",
     subscriptionStartDate: "2026-01-01",
-    attendance: { "2026-07-10": "delivered" },
+    attendance: { ...attendance, "2026-07-10": "delivered" },
     pricingHistory: JULY_PRICE,
     today: "2026-07-10",
   });
@@ -198,10 +205,12 @@ test("resolveDailyRate: throws when nothing resolves", () => {
 });
 
 test("calculateMonthCharge honors a unit override as a flat per-day rate", () => {
+  const attendance: Record<string, "delivered" | "not_delivered"> = {};
+  for (let d = 1; d <= 31; d++) attendance[`2026-07-${String(d).padStart(2, "0")}`] = "delivered";
   const charge = calculateMonthCharge({
     billingPeriod: "2026-07",
     subscriptionStartDate: "2026-01-01",
-    attendance: {},
+    attendance,
     pricingHistory: JULY_PRICE, // would otherwise bill 310 for the month
     today: "2026-08-01",
     unitOverride: 7,
@@ -258,24 +267,42 @@ test("calculateCycleCharge prorates a cross-month cycle against each day's own m
   // of August (31-day month too, so same day-count coincidence avoided by
   // picking a price that only matters if per-day division is wrong).
   const pricingHistory = [{ price: 620, effectiveFrom: "2026-01-01" }]; // 620/31 = 20/day in both months
+  const attendance: Record<string, "delivered" | "not_delivered"> = {};
+  let d = new Date(Date.UTC(2026, 6, 15));
+  while (d <= new Date(Date.UTC(2026, 7, 14))) {
+    attendance[d.toISOString().slice(0, 10)] = "delivered";
+    d = new Date(d.getTime() + 86400000);
+  }
   const charge = calculateCycleCharge({
     cycleStart: "2026-07-15",
     cycleEnd: "2026-08-14",
     subscriptionStartDate: "2026-01-01",
-    attendance: {},
+    attendance,
     pricingHistory,
     today: "2026-09-01",
   });
   assert.equal(charge, 31 * 20); // 17 July days + 14 Aug days = 31 days * 20/day
 });
 
-test("unmarkedDefault: 'delivered' (default) charges unmarked days, matching the original FRD behavior", () => {
+test("unmarkedDefault: defaults to 'not_delivered' — unmarked days are not billed", () => {
   const charge = calculateMonthCharge({
     billingPeriod: "2026-07",
     subscriptionStartDate: "2026-01-01",
     attendance: {},
     pricingHistory: JULY_PRICE,
     today: "2026-08-01",
+  });
+  assert.equal(charge, 0);
+});
+
+test("unmarkedDefault: 'delivered' still charges unmarked days when explicitly requested", () => {
+  const charge = calculateMonthCharge({
+    billingPeriod: "2026-07",
+    subscriptionStartDate: "2026-01-01",
+    attendance: {},
+    pricingHistory: JULY_PRICE,
+    today: "2026-08-01",
+    unmarkedDefault: "delivered",
   });
   assert.equal(charge, 310);
 });

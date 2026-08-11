@@ -23,17 +23,11 @@ import {
 } from "@/lib/billing/calculate";
 import { postLedgerEntry } from "@/lib/billing/ledger";
 
-// Confirmed 2026-07-14: flip the "unmarked attendance day" default from
-// delivered to not_delivered, but only for billing cycles that START on or
-// after this date — a cycle already in progress when this shipped keeps the
-// old delivered-default for its whole length (so July's live totals don't
-// suddenly crater for POCs who were only marking absences). Applies per
-// reader-cycle, so custom billingAnchorDay readers cut over individually
-// based on their own cycle's start date, not a shared calendar boundary.
-const UNMARKED_DEFAULT_CUTOVER_DATE = "2026-07-14";
-
-function unmarkedDefaultFor(cycleStart: string): AttendanceStatus {
-  return cycleStart >= UNMARKED_DEFAULT_CUTOVER_DATE ? "not_delivered" : "delivered";
+// An unmarked attendance day never bills — it defaults to not_delivered.
+// There is no fallback to delivered: if a POC hasn't marked a day, it isn't
+// charged. Callers must mark a day delivered explicitly for it to count.
+function unmarkedDefaultFor(): AttendanceStatus {
+  return "not_delivered";
 }
 
 async function getReaderBillingContext(readerId: number) {
@@ -163,7 +157,7 @@ async function computeUnbilledCharge(
     attendance: attendanceMap,
     pricingHistory,
     today,
-    unmarkedDefault: unmarkedDefaultFor(periodStart),
+    unmarkedDefault: unmarkedDefaultFor(),
     ...overrides,
   });
 }
@@ -194,7 +188,7 @@ export async function getCurrentMonthProvisional(readerId: number) {
     attendance: attendanceMap,
     pricingHistory,
     today,
-    unmarkedDefault: unmarkedDefaultFor(cycleStart),
+    unmarkedDefault: unmarkedDefaultFor(),
     ...overrides,
   });
 
@@ -278,7 +272,7 @@ export async function getBillingBreakdown(readerId: number) {
     attendance: attendanceMap,
     pricingHistory,
     today,
-    unmarkedDefault: unmarkedDefaultFor(cycleStart),
+    unmarkedDefault: unmarkedDefaultFor(),
     ...overrides,
   });
 
@@ -484,7 +478,7 @@ export async function getReaderMonthlyLedger(readerId: number): Promise<ReaderMo
       attendance: attendanceMap,
       pricingHistory,
       today,
-      unmarkedDefault: unmarkedDefaultFor(periodStart),
+      unmarkedDefault: unmarkedDefaultFor(),
       ...overrides,
     });
   }
@@ -556,7 +550,7 @@ export async function closeSubscription(readerId: number): Promise<CloseSubscrip
     attendance: attendanceMap,
     pricingHistory,
     today,
-    unmarkedDefault: unmarkedDefaultFor(periodStart),
+    unmarkedDefault: unmarkedDefaultFor(),
     ...overrides,
   });
 
@@ -693,7 +687,7 @@ export async function listReadersWithAmountDue(filters: ReaderAmountDueFilters =
       attendance: attendanceByReader.get(r.id) ?? {},
       pricingHistory: pricingByCityId.get(r.cityId) ?? [],
       today,
-      unmarkedDefault: unmarkedDefaultFor(periodStart),
+      unmarkedDefault: unmarkedDefaultFor(),
       ...overrides,
     });
     const amountDue = Math.round((Number(r.outstandingBalance) + unbilled) * 100) / 100;

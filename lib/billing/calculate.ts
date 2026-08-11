@@ -1,9 +1,10 @@
 // Pure, DB-free billing math — the highest-risk correctness surface in this
 // app. Formula (confirmed): daily_rate = price_effective_that_day /
 // days_in_that_calendar_month; monthly charge = sum of daily_rate over days
-// marked 'delivered'. Unmarked days default to delivered. Mid-month price
-// changes and mid-month subscription starts are handled naturally by summing
-// per-day rather than multiplying a flat monthly price.
+// marked 'delivered'. Unmarked days default to not_delivered and are never
+// billed. Mid-month price changes and mid-month subscription starts are
+// handled naturally by summing per-day rather than multiplying a flat monthly
+// price.
 //
 // Most readers bill on the calendar month (calculateMonthCharge). A reader
 // can instead have a custom billing-cycle anchor day (1-28) so their cycle
@@ -90,16 +91,15 @@ export interface CalculateCycleChargeParams {
   specialDayPrices?: Record<string, number>;
   /**
    * Status assumed for a day with no attendance row at all. Defaults to
-   * "delivered" (the original FRD decision, minimizes POC data entry). Callers
-   * pass "not_delivered" for cycles starting on/after the absent-by-default
-   * cutover — see lib/data/billing.ts's UNMARKED_DEFAULT_CUTOVER_DATE.
+   * "not_delivered" — an unmarked day is never billed unless someone marks it
+   * delivered explicitly. See lib/data/billing.ts.
    */
   unmarkedDefault?: AttendanceStatus;
 }
 
 export function calculateCycleCharge(params: CalculateCycleChargeParams): number {
   const today = params.today ?? new Date().toISOString().slice(0, 10);
-  const unmarkedDefault = params.unmarkedDefault ?? "delivered";
+  const unmarkedDefault = params.unmarkedDefault ?? "not_delivered";
 
   const periodStart = params.subscriptionStartDate > params.cycleStart ? params.subscriptionStartDate : params.cycleStart;
   const periodEnd = today < params.cycleEnd ? today : params.cycleEnd;
