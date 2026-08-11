@@ -4,6 +4,7 @@ import { useMemo, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { toggleAttendanceAction, markAttendanceRangeAction } from "../../attendance/actions";
 import { Button } from "@/components/ui/button";
+import { DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem } from "@/components/ui/dropdown-menu";
 import { cn } from "@/lib/utils";
 
 const WEEKDAYS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
@@ -103,12 +104,11 @@ export function AttendanceCalendar({
   let absentCount = 0;
   let unmarkedCount = 0;
 
-  function handleClick(dateStr: string, current: "delivered" | "not_delivered") {
-    const next = current === "delivered" ? "not_delivered" : "delivered";
+  function markDate(dateStr: string, status: "delivered" | "not_delivered") {
     setError(null);
     setPendingDate(dateStr);
     startTransition(async () => {
-      const result = await toggleAttendanceAction(readerId, dateStr, next);
+      const result = await toggleAttendanceAction(readerId, dateStr, status);
       setPendingDate(null);
       if (result && "error" in result) {
         setError(result.error);
@@ -164,20 +164,18 @@ export function AttendanceCalendar({
               if (!explicit) unmarkedCount++;
             }
 
-            return (
+            const dayButton = (
               <button
-                key={dateStr}
                 type="button"
                 data-date={dateStr}
                 disabled={disabled || isPending}
                 onClick={() => {
                   setFocusedDate(dateStr);
                   setAnchorDate(null);
-                  handleClick(dateStr, effective ?? "delivered");
                 }}
-                title={disabled ? undefined : effective === "not_delivered" ? "Undelivered — click to mark delivered" : "Delivered — click to mark undelivered"}
+                title={disabled ? undefined : "Choose Delivered or Not Delivered"}
                 className={cn(
-                  "flex h-12 flex-col items-center justify-center rounded-md border text-xs transition-colors",
+                  "flex h-12 w-full flex-col items-center justify-center rounded-md border text-xs transition-colors",
                   disabled && "cursor-not-allowed border-transparent bg-muted/40 text-muted-foreground/50",
                   !disabled && effective === "not_delivered" && "border-destructive/30 bg-destructive/10 text-destructive hover:bg-destructive/20",
                   !disabled && effective === "delivered" && explicit && "border-green-200 bg-green-50 text-green-700 hover:bg-green-100 dark:border-green-900 dark:bg-green-950/40 dark:text-green-400",
@@ -194,6 +192,30 @@ export function AttendanceCalendar({
                   </span>
                 )}
               </button>
+            );
+
+            if (disabled) return <div key={dateStr}>{dayButton}</div>;
+
+            return (
+              <DropdownMenu key={dateStr}>
+                <DropdownMenuTrigger render={dayButton} />
+                <DropdownMenuContent align="center" side="top">
+                  <DropdownMenuItem
+                    disabled={isPending}
+                    onClick={() => markDate(dateStr, "delivered")}
+                    className="text-green-700 dark:text-green-400"
+                  >
+                    Delivered
+                  </DropdownMenuItem>
+                  <DropdownMenuItem
+                    disabled={isPending}
+                    onClick={() => markDate(dateStr, "not_delivered")}
+                    className="text-destructive"
+                  >
+                    Not Delivered
+                  </DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
             );
           })}
         </div>
@@ -224,7 +246,7 @@ export function AttendanceCalendar({
         <span>Unmarked: {unmarkedCount}</span>
       </div>
       <p className="text-xs text-muted-foreground">
-        Click a day to toggle it between Delivered and Undelivered. Click the grid then use arrow keys to move, or
+        Tap a day to choose Delivered or Not Delivered from the menu. Click the grid then use arrow keys to move, or
         Shift+Arrow to select a range and mark it all at once.
       </p>
     </div>
