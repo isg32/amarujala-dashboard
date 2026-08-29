@@ -4,11 +4,12 @@
 -- 1. Create new enum type with renamed value
 CREATE TYPE "public"."ledger_entry_type_new" AS ENUM('period_charge', 'payment', 'coupon_discount', 'adjustment');
 
--- 2. Update column to use new type (via temporary text column)
+-- 2. Update column to use new type
+-- Cast old enum to text first, then to new enum type
 ALTER TABLE "public"."reader_billing_ledger" 
   ALTER COLUMN "entry_type" TYPE "public"."ledger_entry_type_new" 
   USING CASE 
-    WHEN "entry_type" = 'monthly_charge' THEN 'period_charge'::"public"."ledger_entry_type_new"
+    WHEN "entry_type"::text = 'monthly_charge' THEN 'period_charge'::"public"."ledger_entry_type_new"
     ELSE "entry_type"::text::"public"."ledger_entry_type_new"
   END;
 
