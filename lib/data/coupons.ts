@@ -143,6 +143,7 @@ export async function applyCoupon(readerId: number, couponId: number, remarks?: 
         readerId,
         entryType: "coupon_discount",
         amount: -discountAmount,
+        billingPeriod: new Date().toISOString().slice(0, 7),
         referenceId: inserted.id,
         description: `Coupon ${coupon.code} applied`,
         createdBy: user.id,

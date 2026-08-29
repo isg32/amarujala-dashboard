@@ -84,6 +84,7 @@ export async function recordPayment(input: RecordPaymentInput) {
         readerId: input.readerId,
         entryType: "payment",
         amount: -input.amount,
+        billingPeriod: input.paymentDate.slice(0, 7),
         entryDate: input.paymentDate,
         referenceId: inserted.id,
         description: `Payment via ${input.method}`,
@@ -126,6 +127,9 @@ export async function reversePayment(paymentId: number, reason?: string) {
         readerId: payment.readerId,
         entryType: "adjustment",
         amount: Number(payment.amount),
+        // Tag to the reversed payment's own month so the two net out in the
+        // same Monthly Ledger row rather than leaving a phantom balance.
+        billingPeriod: payment.paymentDate.slice(0, 7),
         referenceId: paymentId,
         description: `Reversal of payment #${paymentId}${reason ? `: ${reason}` : ""}`,
         createdBy: user.id,
@@ -258,6 +262,7 @@ export async function markPaymentIntentResult(
         readerId: intent.readerId,
         entryType: "payment",
         amount: -(recordPaymentAmount ?? Number(intent.amount)),
+        billingPeriod: paymentDate.slice(0, 7),
         entryDate: paymentDate,
         referenceId: payment.id,
         description: `PayU payment (txn ${txnId})`,
