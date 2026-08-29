@@ -9,7 +9,7 @@ import { calculateCycleCharge, getBillingCycle } from "@/lib/billing/calculate";
 const db = drizzle({ client: new Pool({ connectionString: process.env.DATABASE_URL }) });
 
 // Default unmarked = not_delivered (never billed)
-function unmarkedDefault() { return "not_delivered"; }
+function unmarkedDefault(): "not_delivered" { return "not_delivered"; }
 
 async function postLedgerEntryDirect(input: {
   readerId: number;
@@ -103,7 +103,7 @@ async function backfillReader(readerId: number, adminId: string) {
 
   // Determine start period
   let startPeriod: string;
-  if (lastCharge) {
+  if (lastCharge?.billingPeriod) {
     // Next month after last charge
     const [y, m] = lastCharge.billingPeriod.split("-").map(Number);
     const next = new Date(Date.UTC(y, m, 1));
