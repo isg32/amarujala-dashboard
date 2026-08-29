@@ -48,7 +48,7 @@ export const pricingOverrideScopeEnum = pgEnum("pricing_override_scope", [
   "center",
 ]);
 export const ledgerEntryTypeEnum = pgEnum("ledger_entry_type", [
-  "monthly_charge",
+  "period_charge",
   "payment",
   "coupon_discount",
   "adjustment",
@@ -380,6 +380,6 @@ export const readerBillingLedger = pgTable(
   (table) => [
     uniqueIndex("ledger_reader_period_charge_idx")
       .on(table.readerId, table.billingPeriod)
-      .where(sql`${table.entryType} = 'monthly_charge'`),
+      .where(sql`${table.entryType} = 'period_charge'`),
   ]
 );

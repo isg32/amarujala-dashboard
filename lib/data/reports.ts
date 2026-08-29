@@ -246,7 +246,7 @@ export async function getGroupedReport(groupBy: GroupBy, filters: GroupedReportF
 
 // Ledger totals grouped by the calendar month each entry was posted in
 // (created_at, not billing_period — payments/discounts aren't tagged with a
-// billing_period, only monthly_charge entries are, so grouping by when the
+// billing_period, only period_charge entries are, so grouping by when the
 // activity actually happened is what makes this a true monthly summary).
 export async function getMonthlySummaryReport(filters: ReportCenterFilter = {}) {
   const user = await requireAppUser();
@@ -268,7 +268,7 @@ export async function getMonthlySummaryReport(filters: ReportCenterFilter = {}) 
     if (!byMonth.has(row.month)) byMonth.set(row.month, { charges: 0, payments: 0, discounts: 0 });
     const bucket = byMonth.get(row.month)!;
     const amount = Number(row.total);
-    if (row.entryType === "monthly_charge") bucket.charges += amount;
+    if (row.entryType === "period_charge") bucket.charges += amount;
     else if (row.entryType === "payment") bucket.payments += -amount; // stored negative; show as a positive collected total
     else if (row.entryType === "coupon_discount") bucket.discounts += -amount;
   }
@@ -370,7 +370,7 @@ export async function getDetailedLedgerReport(filters: GroupedReportFilters = {}
       cityName: cities.name,
       pocName: appUsers.name,
       billingPeriod: readerBillingLedger.billingPeriod,
-      charges: sqlOp<number>`coalesce(sum(${readerBillingLedger.amount}) filter (where ${readerBillingLedger.entryType} = 'monthly_charge'), 0)`,
+      charges: sqlOp<number>`coalesce(sum(${readerBillingLedger.amount}) filter (where ${readerBillingLedger.entryType} = 'period_charge'), 0)`,
       payments: sqlOp<number>`coalesce(sum(abs(${readerBillingLedger.amount})) filter (where ${readerBillingLedger.entryType} = 'payment'), 0)`,
       discounts: sqlOp<number>`coalesce(sum(abs(${readerBillingLedger.amount})) filter (where ${readerBillingLedger.entryType} in ('coupon_discount', 'adjustment')), 0)`,
     })

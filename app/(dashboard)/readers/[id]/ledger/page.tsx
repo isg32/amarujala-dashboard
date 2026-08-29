@@ -24,7 +24,7 @@ const METHOD_LABELS: Record<string, string> = {
 };
 
 const LEDGER_LABELS: Record<string, string> = {
-  monthly_charge: "Monthly Charge",
+  period_charge: "Period Charge",
   payment: "Payment",
   coupon_discount: "Coupon Discount",
   adjustment: "Adjustment",
@@ -141,51 +141,52 @@ export default async function ReaderLedgerPage({ params }: { params: Promise<{ i
         <CardContent>
           <div className="overflow-x-auto">
             <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Billing Period</TableHead>
-                  <TableHead>Date Range</TableHead>
-                  <TableHead>Charges</TableHead>
-                  <TableHead>Paid</TableHead>
-                  <TableHead>Discounts</TableHead>
-                  <TableHead>Underpaid (Due)</TableHead>
-                  <TableHead>Overpaid (Credit)</TableHead>
-                  <TableHead>Delivered</TableHead>
-                  <TableHead>Not Delivered</TableHead>
-                  <TableHead>Not Updated</TableHead>
-                  <TableHead>N/A</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {monthlyRows.length === 0 ? (
+<TableHeader>
+            <TableRow>
+              <TableHead>Billing Year</TableHead>
+              <TableHead>Billing Month</TableHead>
+              <TableHead>Date Range</TableHead>
+              <TableHead>Charges</TableHead>
+              <TableHead>Paid</TableHead>
+              <TableHead>Discounts & Adjustments</TableHead>
+              <TableHead>Underpaid (Due)</TableHead>
+              <TableHead>Overpaid (Credit)</TableHead>
+              <TableHead>Delivered</TableHead>
+              <TableHead>Not Delivered</TableHead>
+              <TableHead>Not Updated</TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {monthlyRows.length === 0 ? (
                   <TableRow>
-                    <TableCell colSpan={11} className="text-center text-sm text-muted-foreground">
+                    <TableCell colSpan={10} className="text-center text-sm text-muted-foreground">
                       No billing history yet.
                     </TableCell>
                   </TableRow>
                 ) : (
-                  monthlyRows.map((r) => (
-                    <TableRow key={r.billingPeriod}>
-                      <TableCell className="whitespace-nowrap font-medium">
-                        {r.billingPeriod}
-                        {r.isCurrentOpen && (
-                          <Badge variant="outline" className="ml-2 text-xs">Open</Badge>
-                        )}
-                      </TableCell>
-                      <TableCell className="whitespace-nowrap text-xs text-muted-foreground">
-                        {r.billingPeriod === "Uncategorized" ? "—" : `${r.periodStart} → ${r.periodEnd}`}
-                      </TableCell>
-                      <TableCell>{currency(r.charges)}</TableCell>
-                      <TableCell className="text-green-600 dark:text-green-400">{currency(r.paid)}</TableCell>
-                      <TableCell>{currency(r.discounts)}</TableCell>
-                      <TableCell className={r.due > 0 ? "font-medium text-destructive" : ""}>{r.due > 0 ? currency(r.due) : "—"}</TableCell>
-                      <TableCell className="text-green-600 dark:text-green-400">{r.credit > 0 ? currency(r.credit) : "—"}</TableCell>
-                      <TableCell>{r.delivered}</TableCell>
-                      <TableCell className="text-destructive">{r.notDelivered > 0 ? r.notDelivered : "—"}</TableCell>
-                      <TableCell className="text-amber-600 dark:text-amber-400">{r.notUpdated > 0 ? r.notUpdated : "—"}</TableCell>
-                      <TableCell className="text-muted-foreground">{r.notApplicable > 0 ? r.notApplicable : "—"}</TableCell>
-                    </TableRow>
-                  ))
+                  monthlyRows.map((r) => {
+                    const monthNames = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
+                    const [year, month] = r.billingPeriod.split("-").map(Number);
+                    const billingYear = r.billingPeriod === "Uncategorized" ? "—" : String(year);
+                    const billingMonth = r.billingPeriod === "Uncategorized" ? "—" : monthNames[month - 1] ?? "—";
+                    return (
+                      <TableRow key={r.billingPeriod}>
+                        <TableCell className="whitespace-nowrap font-medium">{billingYear}</TableCell>
+                        <TableCell className="whitespace-nowrap font-medium">{billingMonth}</TableCell>
+                        <TableCell className="whitespace-nowrap text-xs text-muted-foreground">
+                          {r.billingPeriod === "Uncategorized" ? "—" : `${r.periodStart} → ${r.periodEnd}`}
+                        </TableCell>
+                        <TableCell>{currency(r.charges)}</TableCell>
+                        <TableCell className="text-green-600 dark:text-green-400">{currency(r.paid)}</TableCell>
+                        <TableCell>{currency(r.discounts)}</TableCell>
+                        <TableCell className={r.due > 0 ? "font-medium text-destructive" : ""}>{r.due > 0 ? currency(r.due) : "—"}</TableCell>
+                        <TableCell className="text-green-600 dark:text-green-400">{r.credit > 0 ? currency(r.credit) : "—"}</TableCell>
+                        <TableCell>{r.delivered}</TableCell>
+                        <TableCell className="text-destructive">{r.notDelivered > 0 ? r.notDelivered : "—"}</TableCell>
+                        <TableCell className="text-amber-600 dark:text-amber-400">{r.notUpdated > 0 ? r.notUpdated : "—"}</TableCell>
+                      </TableRow>
+                    );
+                  })
                 )}
               </TableBody>
             </Table>

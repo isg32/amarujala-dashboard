@@ -22,7 +22,7 @@ const db = drizzle({ client: new Pool({ connectionString: process.env.DATABASE_U
 // server runtime (this is a standalone script, same as scripts/seed.ts).
 async function postLedgerEntry(input: {
   readerId: number;
-  entryType: "monthly_charge" | "payment" | "coupon_discount" | "adjustment";
+  entryType: "period_charge" | "payment" | "coupon_discount" | "adjustment";
   amount: number;
   billingPeriod?: string;
   referenceId?: number;
@@ -177,7 +177,7 @@ async function main() {
     if (charge <= 0) continue;
     await postLedgerEntry({
       readerId: reader.id,
-      entryType: "monthly_charge",
+      entryType: "period_charge",
       amount: charge,
       billingPeriod: "2026-06",
       description: "June 2026 delivery charge",

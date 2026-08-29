@@ -5,7 +5,7 @@ import { readers, readerBillingLedger } from "@/lib/db/schema";
 
 type Tx = Parameters<Parameters<typeof db.transaction>[0]>[0];
 
-export type LedgerEntryType = "monthly_charge" | "payment" | "coupon_discount" | "adjustment";
+export type LedgerEntryType = "period_charge" | "payment" | "coupon_discount" | "adjustment";
 
 export interface PostLedgerEntryInput {
   readerId: number;

@@ -18,8 +18,10 @@ type MonthlyRow = {
 };
 
 function toCsv(rows: MonthlyRow[]): string {
+  const monthNames = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
   const header = [
-    "Billing Period",
+    "Billing Year",
+    "Billing Month",
     "Period Start",
     "Period End",
     "Charges",
@@ -30,7 +32,6 @@ function toCsv(rows: MonthlyRow[]): string {
     "Delivered",
     "Not Delivered",
     "Not Updated",
-    "Not Applicable",
   ];
   const escape = (v: string | number) => {
     const s = String(v);
@@ -38,8 +39,11 @@ function toCsv(rows: MonthlyRow[]): string {
   };
   const lines = [header.map(escape).join(",")];
   for (const r of rows) {
+    const [year, month] = r.billingPeriod.split("-").map(Number);
+    const billingYear = r.billingPeriod === "Uncategorized" ? "—" : String(year);
+    const billingMonth = r.billingPeriod === "Uncategorized" ? "—" : monthNames[month - 1] ?? "—";
     lines.push(
-      [r.billingPeriod, r.periodStart, r.periodEnd, r.charges, r.paid, r.discounts, r.due, r.credit, r.delivered, r.notDelivered, r.notUpdated, r.notApplicable]
+      [billingYear, billingMonth, r.periodStart, r.periodEnd, r.charges, r.paid, r.discounts, r.due, r.credit, r.delivered, r.notDelivered, r.notUpdated]
         .map(escape)
         .join(",")
     );

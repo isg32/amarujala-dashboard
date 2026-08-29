@@ -21,7 +21,7 @@ import { formatAmountDue } from "@/lib/billing/format";
 import { LedgerDateFilter } from "./ledger-date-filter";
 
 const LEDGER_LABELS: Record<string, string> = {
-  monthly_charge: "Monthly Charge",
+  period_charge: "Period Charge",
   payment: "Payment",
   coupon_discount: "Coupon Discount",
   adjustment: "Adjustment",
@@ -127,7 +127,7 @@ export default async function ReaderProfilePage({
         </CardHeader>
         <CardContent className="flex flex-wrap items-center justify-between gap-3 border-b pb-4 text-sm">
           {isAdmin && <BillingCycleForm readerId={reader.id} billingAnchorDay={reader.billingAnchorDay} />}
-          {reader.status === "active" && <CloseSubscriptionButton readerId={reader.id} readerName={reader.name} />}
+          {reader.status === "active" && <CloseSubscriptionButton readerId={reader.id} readerName={reader.name} amountDue={amountDue} />}
         </CardContent>
         <CardContent>
           <LedgerDateFilter dateFrom={dateFrom} dateTo={dateTo} />

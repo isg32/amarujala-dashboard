@@ -112,15 +112,15 @@ async function getAttendanceMap(
   return Object.fromEntries(rows.map((r) => [r.attendanceDate, r.status]));
 }
 
-// Returns the day after the last posted monthly_charge for this reader, or
-// the subscriptionStartDate if no monthly_charge has ever been posted. Used
+// Returns the day after the last posted period_charge for this reader, or
+// the subscriptionStartDate if no period_charge has ever been posted. Used
 // by both getAmountDue (for live computation across all unbilled cycles) and
 // closeSubscription (to know where the final charge should begin).
 async function getUnbilledPeriodStart(readerId: number, subscriptionStartDate: string): Promise<string> {
   const [lastCharge] = await db
     .select({ entryDate: readerBillingLedger.entryDate })
     .from(readerBillingLedger)
-    .where(and(eq(readerBillingLedger.readerId, readerId), eq(readerBillingLedger.entryType, "monthly_charge")))
+    .where(and(eq(readerBillingLedger.readerId, readerId), eq(readerBillingLedger.entryType, "period_charge")))
     .orderBy(desc(readerBillingLedger.entryDate))
     .limit(1);
 
@@ -130,7 +130,7 @@ async function getUnbilledPeriodStart(readerId: number, subscriptionStartDate: s
   return d.toISOString().slice(0, 10);
 }
 
-// Sum of daily rates from the last posted monthly_charge date (or
+// Sum of daily rates from the last posted period_charge date (or
 // subscription start) through today — the missing piece that makes
 // getAmountDue() correct across cycle boundaries without requiring a
 // periodic Close Month click. Includes the current cycle's unbilled days
@@ -197,7 +197,7 @@ export async function getCurrentMonthProvisional(readerId: number) {
 
 // The one number admin actually cares about: everything already posted to
 // the ledger (readers.outstanding_balance) plus every unbilled day since the
-// last posted monthly_charge (or subscription start if never billed) — so
+// last posted period_charge (or subscription start if never billed) — so
 // it's always accurate without needing a Close Month click, even when
 // multiple billing cycles have passed without one. Negative means the reader
 // is in credit (see reader-table.tsx / reader-profile-card.tsx for the
@@ -304,7 +304,7 @@ export async function getBillingBreakdown(readerId: number) {
   byPeriod.sort((a, b) => b.billingPeriod.localeCompare(a.billingPeriod));
 
   const isClosedCurrentMonth = context.status === "inactive" &&
-    ledgerRows.some((r) => r.billingPeriod === billingPeriod && r.entryType === "monthly_charge");
+    ledgerRows.some((r) => r.billingPeriod === billingPeriod && r.entryType === "period_charge");
 
   return {
     previousOutstanding: Math.round(previousOutstanding * 100) / 100,
@@ -389,7 +389,7 @@ export async function getReaderMonthlyLedger(readerId: number): Promise<ReaderMo
   const ledgerGrouped = await db
     .select({
       billingPeriod: readerBillingLedger.billingPeriod,
-      charges: sql<number>`coalesce(sum(${readerBillingLedger.amount}) filter (where ${readerBillingLedger.entryType} = 'monthly_charge'), 0)`,
+      charges: sql<number>`coalesce(sum(${readerBillingLedger.amount}) filter (where ${readerBillingLedger.entryType} = 'period_charge'), 0)`,
       payments: sql<number>`coalesce(sum(abs(${readerBillingLedger.amount})) filter (where ${readerBillingLedger.entryType} = 'payment'), 0)`,
       discounts: sql<number>`coalesce(sum(abs(${readerBillingLedger.amount})) filter (where ${readerBillingLedger.entryType} in ('coupon_discount', 'adjustment')), 0)`,
     })
@@ -510,20 +510,25 @@ export async function getReaderMonthlyLedger(readerId: number): Promise<ReaderMo
   });
 }
 
+export interface CloseSubscriptionOptions {
+  writeOffPendingAsAdjustment?: boolean;
+}
+
 export interface CloseSubscriptionResult {
   billingPeriod: string;
   amount: number;
+  writtenOffAsAdjustment?: boolean;
 }
 
 // Replaces the old periodic Close Month / closeReaderCycle ritual — billing
 // no longer requires a recurring admin click (see getAmountDue() below for
 // the live running total shown everywhere instead). This is only for when a
 // reader's subscription actually ends: it posts ONE final ledger charge for
-// everything accrued since their last posted monthly_charge (or subscription
+// everything accrued since their last posted period_charge (or subscription
 // start if they were never billed), then marks them inactive. Idempotent in
 // the sense that closing an already-inactive reader is rejected outright
 // rather than double-charging them.
-export async function closeSubscription(readerId: number): Promise<CloseSubscriptionResult> {
+export async function closeSubscription(readerId: number, options?: CloseSubscriptionOptions): Promise<CloseSubscriptionResult> {
   const user = await requireAppUser();
   const context = await getReaderBillingContext(readerId);
   if (context.status === "inactive") {
@@ -555,22 +560,51 @@ export async function closeSubscription(readerId: number): Promise<CloseSubscrip
   });
 
   await db.transaction(async (tx) => {
-    await postLedgerEntry(
-      {
-        readerId,
-        entryType: "monthly_charge",
-        amount,
-        billingPeriod,
-        entryDate: today,
-        description: `Subscription closed ${periodStart} – ${today}`,
-        createdBy: user.id,
-      },
-      tx
-    );
+    if (options?.writeOffPendingAsAdjustment && amount > 0) {
+      await postLedgerEntry(
+        {
+          readerId,
+          entryType: "adjustment",
+          amount: -amount,
+          billingPeriod,
+          entryDate: today,
+          description: `Subscription closed — pending written off as adjustment (${periodStart} – ${today})`,
+          createdBy: user.id,
+        },
+        tx
+      );
+    } else if (amount > 0) {
+      await postLedgerEntry(
+        {
+          readerId,
+          entryType: "period_charge",
+          amount,
+          billingPeriod,
+          entryDate: today,
+          description: `Subscription closed ${periodStart} – ${today}`,
+          createdBy: user.id,
+        },
+        tx
+      );
+    } else {
+      // Amount is 0 — still post a $0 period_charge for audit trail
+      await postLedgerEntry(
+        {
+          readerId,
+          entryType: "period_charge",
+          amount: 0,
+          billingPeriod,
+          entryDate: today,
+          description: `Subscription closed ${periodStart} – ${today} (no outstanding)`,
+          createdBy: user.id,
+        },
+        tx
+      );
+    }
     await tx.update(readers).set({ status: "inactive" }).where(eq(readers.id, readerId));
   });
 
-  return { billingPeriod, amount };
+  return { billingPeriod, amount, writtenOffAsAdjustment: options?.writeOffPendingAsAdjustment && amount > 0 };
 }
 
 function scopeToCenters(user: AppUser) {
@@ -633,7 +667,7 @@ export async function listReadersWithAmountDue(filters: ReaderAmountDueFilters =
   );
   const overrideRows = await db.select().from(pricingOverrides).where(eq(pricingOverrides.active, true));
 
-  // Fetch last monthly_charge date for every reader to determine each
+  // Fetch last period_charge date for every reader to determine each
   // reader's unbilled period start — the minimum across all readers sets
   // the attendance window so past cycles are included, not just the
   // current one.
@@ -644,7 +678,7 @@ export async function listReadersWithAmountDue(filters: ReaderAmountDueFilters =
       entryDate: max(readerBillingLedger.entryDate),
     })
     .from(readerBillingLedger)
-    .where(and(inArray(readerBillingLedger.readerId, readerIds), eq(readerBillingLedger.entryType, "monthly_charge")))
+    .where(and(inArray(readerBillingLedger.readerId, readerIds), eq(readerBillingLedger.entryType, "period_charge")))
     .groupBy(readerBillingLedger.readerId);
   const lastChargeByReader = new Map(lastChargeRows.map((r) => [r.readerId, r.entryDate]));
 
