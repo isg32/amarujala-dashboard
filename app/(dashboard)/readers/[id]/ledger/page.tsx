@@ -13,6 +13,7 @@ import { Table, TableHeader, TableRow, TableHead, TableBody, TableCell } from "@
 import { formatAmountDue } from "@/lib/billing/format";
 import { ExportCsvButton } from "./export-csv-button";
 import { PrintButton } from "./print-button";
+import { DeliveryDatesDialog } from "./delivery-dates-dialog";
 
 const METHOD_LABELS: Record<string, string> = {
   cash: "Cash",
@@ -38,6 +39,36 @@ const INTENT_STATUS_LABELS: Record<string, string> = {
 
 function currency(n: number): string {
   return `₹${n.toFixed(2)}`;
+}
+
+// Which exact dates in a billing period were delivered / not delivered / left
+// unmarked, so each Monthly Ledger count can open a list of the actual days.
+// Mirrors getAttendanceCountsForPeriod in lib/data/billing.ts: days past
+// `today` with no attendance row are "not applicable" (cycle hasn't reached
+// them yet), not "not updated".
+function classifyPeriodDates(
+  periodStart: string,
+  periodEnd: string,
+  today: string,
+  byDate: Map<string, string>
+): { delivered: string[]; notDelivered: string[]; notUpdated: string[] } {
+  const delivered: string[] = [];
+  const notDelivered: string[] = [];
+  const notUpdated: string[] = [];
+  if (!periodStart || !periodEnd) return { delivered, notDelivered, notUpdated };
+
+  const stop = periodEnd < today ? periodEnd : today;
+  const cursor = new Date(periodStart + "T00:00:00Z");
+  const end = new Date(stop + "T00:00:00Z");
+  while (cursor <= end) {
+    const iso = cursor.toISOString().slice(0, 10);
+    const status = byDate.get(iso);
+    if (status === "delivered") delivered.push(iso);
+    else if (status === "not_delivered") notDelivered.push(iso);
+    else notUpdated.push(iso);
+    cursor.setUTCDate(cursor.getUTCDate() + 1);
+  }
+  return { delivered, notDelivered, notUpdated };
 }
 
 export default async function ReaderLedgerPage({ params }: { params: Promise<{ id: string }> }) {
@@ -72,11 +103,12 @@ export default async function ReaderLedgerPage({ params }: { params: Promise<{ i
     { charges: 0, paid: 0, discounts: 0, due: 0, credit: 0 }
   );
 
+  const today = new Date().toISOString().slice(0, 10);
+
   // Daily delivery log: every day from subscription start through today.
   const attendanceByDate = new Map(attendanceRows.map((a) => [a.attendanceDate, a.status]));
   const dailyLog: { date: string; status: string }[] = [];
   if (reader.subscriptionStartDate) {
-    const today = new Date().toISOString().slice(0, 10);
     const end = today < reader.subscriptionStartDate ? reader.subscriptionStartDate : today;
     const cursor = new Date(reader.subscriptionStartDate + "T00:00:00Z");
     const endDate = new Date(end + "T00:00:00Z");
@@ -159,7 +191,7 @@ export default async function ReaderLedgerPage({ params }: { params: Promise<{ i
           <TableBody>
             {monthlyRows.length === 0 ? (
                   <TableRow>
-                    <TableCell colSpan={10} className="text-center text-sm text-muted-foreground">
+                    <TableCell colSpan={11} className="text-center text-sm text-muted-foreground">
                       No billing history yet.
                     </TableCell>
                   </TableRow>
@@ -169,6 +201,8 @@ export default async function ReaderLedgerPage({ params }: { params: Promise<{ i
                     const [year, month] = r.billingPeriod.split("-").map(Number);
                     const billingYear = r.billingPeriod === "Uncategorized" ? "—" : String(year);
                     const billingMonth = r.billingPeriod === "Uncategorized" ? "—" : monthNames[month - 1] ?? "—";
+                    const monthLabel = `${billingMonth} ${billingYear}`;
+                    const dates = classifyPeriodDates(r.periodStart, r.periodEnd, today, attendanceByDate);
                     return (
                       <TableRow key={r.billingPeriod}>
                         <TableCell className="whitespace-nowrap font-medium">{billingYear}</TableCell>
@@ -181,9 +215,15 @@ export default async function ReaderLedgerPage({ params }: { params: Promise<{ i
                         <TableCell>{currency(r.discounts)}</TableCell>
                         <TableCell className={r.due > 0 ? "font-medium text-destructive" : ""}>{r.due > 0 ? currency(r.due) : "—"}</TableCell>
                         <TableCell className="text-green-600 dark:text-green-400">{r.credit > 0 ? currency(r.credit) : "—"}</TableCell>
-                        <TableCell>{r.delivered}</TableCell>
-                        <TableCell className="text-destructive">{r.notDelivered > 0 ? r.notDelivered : "—"}</TableCell>
-                        <TableCell className="text-amber-600 dark:text-amber-400">{r.notUpdated > 0 ? r.notUpdated : "—"}</TableCell>
+                        <TableCell>
+                          <DeliveryDatesDialog kind="delivered" monthLabel={monthLabel} dates={dates.delivered} />
+                        </TableCell>
+                        <TableCell>
+                          <DeliveryDatesDialog kind="not_delivered" monthLabel={monthLabel} dates={dates.notDelivered} />
+                        </TableCell>
+                        <TableCell>
+                          <DeliveryDatesDialog kind="not_updated" monthLabel={monthLabel} dates={dates.notUpdated} />
+                        </TableCell>
                       </TableRow>
                     );
                   })
