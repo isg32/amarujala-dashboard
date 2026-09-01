@@ -397,7 +397,15 @@ export async function getReaderMonthlyLedger(readerId: number): Promise<ReaderMo
       billingPeriod: readerBillingLedger.billingPeriod,
       charges: sql<number>`coalesce(sum(${readerBillingLedger.amount}) filter (where ${readerBillingLedger.entryType} = 'period_charge'), 0)`,
       payments: sql<number>`coalesce(sum(abs(${readerBillingLedger.amount})) filter (where ${readerBillingLedger.entryType} = 'payment'), 0)`,
-      discounts: sql<number>`coalesce(sum(abs(${readerBillingLedger.amount})) filter (where ${readerBillingLedger.entryType} in ('coupon_discount', 'adjustment')), 0)`,
+      // Coupons always reduce the balance (stored negative) so abs() is fine;
+      // adjustments are now SIGNED (a positive one is a fee that RAISES the
+      // balance), so subtract their signed sum — negative adjustments add to
+      // "discounts", positive ones offset it. Keeps net = charges - paid -
+      // discounts correct in both directions, and unchanged for the
+      // historical data where every adjustment was a write-off / reversal.
+      discounts: sql<number>`
+        coalesce(sum(abs(${readerBillingLedger.amount})) filter (where ${readerBillingLedger.entryType} = 'coupon_discount'), 0)
+        - coalesce(sum(${readerBillingLedger.amount}) filter (where ${readerBillingLedger.entryType} = 'adjustment'), 0)`,
     })
     .from(readerBillingLedger)
     .where(eq(readerBillingLedger.readerId, readerId))
@@ -517,13 +525,20 @@ export async function getReaderMonthlyLedger(readerId: number): Promise<ReaderMo
 }
 
 export interface CloseSubscriptionOptions {
-  writeOffPendingAsAdjustment?: boolean;
+  /**
+   * Admin-only custom ledger adjustment posted alongside the final charge —
+   * `amount` is a SIGNED delta on outstanding_balance (negative to waive what's
+   * pending, positive to add a fee — see lib/billing/adjustment.ts); `reason`
+   * becomes the ledger entry's description (e.g. "Closing Adjustment"). To
+   * write off the whole pending balance, pass amount = -(amount due).
+   */
+  adjustment?: { amount: number; reason: string };
 }
 
 export interface CloseSubscriptionResult {
   billingPeriod: string;
   amount: number;
-  writtenOffAsAdjustment?: boolean;
+  adjustmentAmount?: number;
 }
 
 // Replaces the old periodic Close Month / closeReaderCycle ritual — billing
@@ -539,6 +554,12 @@ export async function closeSubscription(readerId: number, options?: CloseSubscri
   const context = await getReaderBillingContext(readerId);
   if (context.status === "inactive") {
     throw new Error("This reader's subscription is already closed.");
+  }
+
+  const adjustment = options?.adjustment;
+  if (adjustment && adjustment.amount !== 0) {
+    if (user.role !== "admin") throw new Error("Only Administrators can post a manual adjustment.");
+    if (!adjustment.reason?.trim()) throw new Error("A closing adjustment needs a reason.");
   }
 
   const today = new Date().toISOString().slice(0, 10);
@@ -565,52 +586,47 @@ export async function closeSubscription(readerId: number, options?: CloseSubscri
     ...overrides,
   });
 
+  const postAdjustment = adjustment != null && adjustment.amount !== 0;
+
   await db.transaction(async (tx) => {
-    if (options?.writeOffPendingAsAdjustment && amount > 0) {
+    // Always post the final period_charge (a $0 row when nothing accrued, for
+    // the audit trail). A closing write-off is now an explicit adjustment
+    // entered by the admin, not an automatic replacement of this charge.
+    await postLedgerEntry(
+      {
+        readerId,
+        entryType: "period_charge",
+        amount: amount > 0 ? amount : 0,
+        billingPeriod,
+        entryDate: today,
+        description:
+          amount > 0
+            ? `Subscription closed ${periodStart} – ${today}`
+            : `Subscription closed ${periodStart} – ${today} (no outstanding)`,
+        createdBy: user.id,
+      },
+      tx
+    );
+
+    if (postAdjustment) {
       await postLedgerEntry(
         {
           readerId,
           entryType: "adjustment",
-          amount: -amount,
+          amount: adjustment!.amount,
           billingPeriod,
           entryDate: today,
-          description: `Subscription closed — pending written off as adjustment (${periodStart} – ${today})`,
-          createdBy: user.id,
-        },
-        tx
-      );
-    } else if (amount > 0) {
-      await postLedgerEntry(
-        {
-          readerId,
-          entryType: "period_charge",
-          amount,
-          billingPeriod,
-          entryDate: today,
-          description: `Subscription closed ${periodStart} – ${today}`,
-          createdBy: user.id,
-        },
-        tx
-      );
-    } else {
-      // Amount is 0 — still post a $0 period_charge for audit trail
-      await postLedgerEntry(
-        {
-          readerId,
-          entryType: "period_charge",
-          amount: 0,
-          billingPeriod,
-          entryDate: today,
-          description: `Subscription closed ${periodStart} – ${today} (no outstanding)`,
+          description: adjustment!.reason.trim(),
           createdBy: user.id,
         },
         tx
       );
     }
+
     await tx.update(readers).set({ status: "inactive" }).where(eq(readers.id, readerId));
   });
 
-  return { billingPeriod, amount, writtenOffAsAdjustment: options?.writeOffPendingAsAdjustment && amount > 0 };
+  return { billingPeriod, amount, adjustmentAmount: postAdjustment ? adjustment!.amount : undefined };
 }
 
 function scopeToCenters(user: AppUser) {

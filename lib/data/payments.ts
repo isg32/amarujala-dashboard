@@ -21,7 +21,8 @@ function scopeToCenters(user: AppUser) {
 
 export interface RecordPaymentInput {
   readerId: number;
-  amount: number;
+  /** Omit (or 0) to post an adjustment only — `adjustment` must then be set. */
+  amount?: number;
   method: PaymentMethod;
   methodOtherLabel?: string;
   transactionReference?: string;
@@ -31,6 +32,13 @@ export interface RecordPaymentInput {
   inProcess?: boolean;
   /** Optional coupon to apply before recording the payment (admin-only). */
   couponId?: number;
+  /**
+   * Optional admin-only manual ledger adjustment posted in the same
+   * transaction. `amount` is a SIGNED delta on outstanding_balance (negative
+   * to waive, positive to add a fee — see lib/billing/adjustment.ts); `reason`
+   * becomes the ledger entry's description ("Closing Adjustment", etc.).
+   */
+  adjustment?: { amount: number; reason: string };
 }
 
 // Available to both roles (AU POCs can "Record payments" per the FRD),
@@ -42,6 +50,17 @@ export async function recordPayment(input: RecordPaymentInput) {
   if (user.role === "au_poc" && !user.permissions.canRecordPayments) {
     throw new Error("You don't have permission to record payments. Contact an Administrator.");
   }
+
+  const hasPayment = input.amount != null && input.amount > 0;
+  const hasAdjustment = input.adjustment != null && input.adjustment.amount !== 0;
+  if (!hasPayment && !hasAdjustment) {
+    throw new Error("Enter a payment amount or a custom adjustment.");
+  }
+  if (hasAdjustment) {
+    if (user.role !== "admin") throw new Error("Only Administrators can post a manual adjustment.");
+    if (!input.adjustment!.reason) throw new Error("A manual adjustment needs a reason.");
+  }
+
   const [reader] = await db.select({ id: readers.id, centerId: readers.centerId, name: readers.name, mobile: readers.mobile }).from(readers).where(eq(readers.id, input.readerId));
   if (!reader) throw new Error("Reader not found.");
   assertCenterInScope(user, reader.centerId);
@@ -63,43 +82,66 @@ export async function recordPayment(input: RecordPaymentInput) {
     await applyCoupon(input.readerId, input.couponId, "Applied during payment recording");
   }
 
+  const paymentAmount = input.amount ?? 0;
+
   const { id } = await db.transaction(async (tx) => {
-    const [inserted] = await tx
-      .insert(payments)
-      .values({
-        readerId: input.readerId,
-        amount: input.amount.toFixed(2),
-        method: input.method,
-        methodOtherLabel: input.methodOtherLabel,
-        transactionReference: input.transactionReference,
-        remarks: input.remarks,
-        paymentDate: input.paymentDate,
-        recordedBy: user.id,
-        inProcess: input.inProcess ?? false,
-      })
-      .returning({ id: payments.id });
+    let paymentId: number | null = null;
 
-    await postLedgerEntry(
-      {
-        readerId: input.readerId,
-        entryType: "payment",
-        amount: -input.amount,
-        billingPeriod: input.paymentDate.slice(0, 7),
-        entryDate: input.paymentDate,
-        referenceId: inserted.id,
-        description: `Payment via ${input.method}`,
-        createdBy: user.id,
-      },
-      tx
-    );
+    if (hasPayment) {
+      const [inserted] = await tx
+        .insert(payments)
+        .values({
+          readerId: input.readerId,
+          amount: paymentAmount.toFixed(2),
+          method: input.method,
+          methodOtherLabel: input.methodOtherLabel,
+          transactionReference: input.transactionReference,
+          remarks: input.remarks,
+          paymentDate: input.paymentDate,
+          recordedBy: user.id,
+          inProcess: input.inProcess ?? false,
+        })
+        .returning({ id: payments.id });
+      paymentId = inserted.id;
 
-    return { id: inserted.id };
+      await postLedgerEntry(
+        {
+          readerId: input.readerId,
+          entryType: "payment",
+          amount: -paymentAmount,
+          billingPeriod: input.paymentDate.slice(0, 7),
+          entryDate: input.paymentDate,
+          referenceId: inserted.id,
+          description: `Payment via ${input.method}`,
+          createdBy: user.id,
+        },
+        tx
+      );
+    }
+
+    if (hasAdjustment) {
+      await postLedgerEntry(
+        {
+          readerId: input.readerId,
+          entryType: "adjustment",
+          amount: input.adjustment!.amount,
+          billingPeriod: input.paymentDate.slice(0, 7),
+          entryDate: input.paymentDate,
+          referenceId: paymentId ?? undefined,
+          description: input.adjustment!.reason,
+          createdBy: user.id,
+        },
+        tx
+      );
+    }
+
+    return { id: paymentId };
   });
 
-  if (!input.inProcess) {
+  if (hasPayment && !input.inProcess) {
     sendPaymentConfirmationSms(
       { name: reader.name, mobile: reader.mobile },
-      input.amount.toFixed(2),
+      paymentAmount.toFixed(2),
       input.transactionReference ?? `PAY-${id}`,
       input.paymentDate
     );

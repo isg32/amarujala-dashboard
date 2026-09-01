@@ -15,6 +15,7 @@ import {
   SelectItem,
   SelectGroup,
 } from "@/components/ui/select";
+import { ADJUSTMENT_REASON_PRESETS, ADJUSTMENT_REASON_OTHER } from "@/lib/billing/adjustment";
 
 const initialState: RecordPaymentState = null;
 const today = new Date().toISOString().slice(0, 10);
@@ -22,6 +23,8 @@ const today = new Date().toISOString().slice(0, 10);
 export function RecordPaymentForm({ readerId, isAdmin = true, coupons }: { readerId: number; isAdmin?: boolean; coupons?: { id: number; code: string; discountAmount: string }[] }) {
   const [state, formAction, pending] = useActionState(recordPaymentAction, initialState);
   const [method, setMethod] = useState("cash");
+  const [showAdjustment, setShowAdjustment] = useState(false);
+  const [adjustmentReason, setAdjustmentReason] = useState<string>(ADJUSTMENT_REASON_PRESETS[1]);
 
   return (
     <form action={formAction} className="flex flex-col gap-3">
@@ -29,7 +32,10 @@ export function RecordPaymentForm({ readerId, isAdmin = true, coupons }: { reade
       <FieldGroup>
         <Field>
           <FieldLabel htmlFor="amount">Amount (₹)</FieldLabel>
-          <Input id="amount" name="amount" type="number" step="0.01" min="0.01" required />
+          <Input id="amount" name="amount" type="number" step="0.01" min="0.01" />
+          {isAdmin && (
+            <span className="text-xs text-muted-foreground">Leave blank to post only an adjustment.</span>
+          )}
         </Field>
         <Field>
           <FieldLabel htmlFor="method">Method</FieldLabel>
@@ -99,6 +105,70 @@ export function RecordPaymentForm({ readerId, isAdmin = true, coupons }: { reade
           <Checkbox name="inProcess" value="true" />
           Mark as in-process (pending verification — e.g. cash not yet deposited, cheque not yet cleared)
         </label>
+
+        {isAdmin && (
+          <div className="rounded-md border p-3">
+            <label className="flex items-center gap-2 text-sm font-medium">
+              <Checkbox
+                checked={showAdjustment}
+                onCheckedChange={(v) => setShowAdjustment(v === true)}
+              />
+              Add a custom adjustment
+            </label>
+            {showAdjustment && (
+              <div className="mt-3 flex flex-col gap-3">
+                <Field>
+                  <FieldLabel htmlFor="adjustmentAmount">Adjustment amount (₹)</FieldLabel>
+                  <Input id="adjustmentAmount" name="adjustmentAmount" type="number" step="0.01" min="0.01" />
+                </Field>
+                <Field>
+                  <FieldLabel htmlFor="adjustmentDirection">Direction</FieldLabel>
+                  <Select name="adjustmentDirection" defaultValue="reduce" items={{ reduce: "Reduce balance (credit)", increase: "Increase balance (charge)" }}>
+                    <SelectTrigger id="adjustmentDirection" className="w-full">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectGroup>
+                        <SelectItem value="reduce">Reduce balance (credit)</SelectItem>
+                        <SelectItem value="increase">Increase balance (charge)</SelectItem>
+                      </SelectGroup>
+                    </SelectContent>
+                  </Select>
+                </Field>
+                <Field>
+                  <FieldLabel htmlFor="adjustmentReason">What it&apos;s for</FieldLabel>
+                  <Select
+                    name="adjustmentReason"
+                    value={adjustmentReason}
+                    onValueChange={(v) => setAdjustmentReason(typeof v === "string" ? v : ADJUSTMENT_REASON_PRESETS[1])}
+                    items={{
+                      ...Object.fromEntries(ADJUSTMENT_REASON_PRESETS.map((r) => [r, r])),
+                      [ADJUSTMENT_REASON_OTHER]: ADJUSTMENT_REASON_OTHER,
+                    }}
+                  >
+                    <SelectTrigger id="adjustmentReason" className="w-full">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectGroup>
+                        {ADJUSTMENT_REASON_PRESETS.map((r) => (
+                          <SelectItem key={r} value={r}>{r}</SelectItem>
+                        ))}
+                        <SelectItem value={ADJUSTMENT_REASON_OTHER}>{ADJUSTMENT_REASON_OTHER}</SelectItem>
+                      </SelectGroup>
+                    </SelectContent>
+                  </Select>
+                </Field>
+                {adjustmentReason === ADJUSTMENT_REASON_OTHER && (
+                  <Field>
+                    <FieldLabel htmlFor="adjustmentReasonOther">Describe the adjustment</FieldLabel>
+                    <Input id="adjustmentReasonOther" name="adjustmentReasonOther" placeholder="e.g. Refund for missed week" />
+                  </Field>
+                )}
+              </div>
+            )}
+          </div>
+        )}
       </FieldGroup>
       <Button type="submit" disabled={pending} className="self-start">
         {pending ? "Recording..." : "Record Payment"}

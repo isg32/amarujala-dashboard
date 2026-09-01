@@ -127,7 +127,7 @@ export default async function ReaderProfilePage({
         </CardHeader>
         <CardContent className="flex flex-wrap items-center justify-between gap-3 border-b pb-4 text-sm">
           {isAdmin && <BillingCycleForm readerId={reader.id} billingAnchorDay={reader.billingAnchorDay} />}
-          {reader.status === "active" && <CloseSubscriptionButton readerId={reader.id} readerName={reader.name} amountDue={amountDue} />}
+          {reader.status === "active" && <CloseSubscriptionButton readerId={reader.id} readerName={reader.name} amountDue={amountDue} isAdmin={isAdmin} />}
         </CardContent>
         <CardContent>
           <LedgerDateFilter dateFrom={dateFrom} dateTo={dateTo} />

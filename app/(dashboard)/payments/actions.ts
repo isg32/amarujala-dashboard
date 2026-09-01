@@ -7,8 +7,10 @@ import { requireAdmin, requireAppUser } from "@/lib/auth/session";
 import { recordPayment, reversePayment, createPaymentLink, markPaymentIntentFailed } from "@/lib/data/payments";
 import { getReader } from "@/lib/data/readers";
 import { sendPaymentLinkSms, previewPaymentLinkMessage, isoToDMY } from "@/lib/sms/send-reminder";
+import { resolveAdjustmentReason, signedAdjustmentAmount } from "@/lib/billing/adjustment";
 
 const methodSchema = z.enum(["cash", "upi", "bank_transfer", "razorpay", "other"]);
+const adjustmentDirectionSchema = z.enum(["reduce", "increase"]);
 
 export type RecordPaymentState = { message: string } | { error: string } | null;
 
@@ -17,7 +19,7 @@ export async function recordPaymentAction(
   formData: FormData
 ): Promise<RecordPaymentState> {
   const readerId = z.coerce.number().int().positive().parse(formData.get("readerId"));
-  const amount = z.coerce.number().positive().parse(formData.get("amount"));
+  const amount = z.coerce.number().positive().optional().parse(formData.get("amount") || undefined);
   const method = methodSchema.parse(formData.get("method"));
   const methodOtherLabel = z.string().trim().optional().parse(formData.get("methodOtherLabel") || undefined);
   const transactionReference = z.string().trim().optional().parse(formData.get("transactionReference") || undefined);
@@ -29,11 +31,31 @@ export async function recordPaymentAction(
   const inProcess = formData.get("inProcess") === "true";
   const couponId = z.coerce.number().int().positive().optional().parse(formData.get("couponId") || undefined);
 
+  // Optional admin-only custom adjustment (see lib/billing/adjustment.ts).
+  const adjustmentAmountAbs = z.coerce.number().positive().optional().parse(formData.get("adjustmentAmount") || undefined);
+  let adjustment: { amount: number; reason: string } | undefined;
+  if (adjustmentAmountAbs != null) {
+    const direction = adjustmentDirectionSchema.parse(formData.get("adjustmentDirection") || "reduce");
+    const reason = resolveAdjustmentReason(
+      z.string().trim().parse(formData.get("adjustmentReason") ?? ""),
+      z.string().trim().optional().parse(formData.get("adjustmentReasonOther") || undefined)
+    );
+    if (!reason) return { error: "Enter what the adjustment is for." };
+    adjustment = { amount: signedAdjustmentAmount(adjustmentAmountAbs, direction), reason };
+  }
+
+  if (amount == null && !adjustment) {
+    return { error: "Enter a payment amount or a custom adjustment." };
+  }
+
   try {
-    await recordPayment({ readerId, amount, method, methodOtherLabel, transactionReference, remarks, paymentDate, inProcess, couponId });
+    await recordPayment({ readerId, amount, method, methodOtherLabel, transactionReference, remarks, paymentDate, inProcess, couponId, adjustment });
     revalidatePath(`/readers/${readerId}`);
     revalidatePath("/payments");
-    return { message: `Recorded payment of ₹${amount.toFixed(2)}.` };
+    const parts: string[] = [];
+    if (amount != null) parts.push(`payment of ₹${amount.toFixed(2)}`);
+    if (adjustment) parts.push(`${adjustment.reason} of ₹${Math.abs(adjustment.amount).toFixed(2)} (${adjustment.amount < 0 ? "credit" : "charge"})`);
+    return { message: `Recorded ${parts.join(" and ")}.` };
   } catch (e) {
     return { error: e instanceof Error ? e.message : "Failed to record payment." };
   }
