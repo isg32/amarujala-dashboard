@@ -127,10 +127,16 @@ export function isoToDMY(isoDate: string): string {
 type ReminderReader = { name: string; mobile: string; outstandingBalance: string };
 
 export interface ReminderAmounts {
-  /** Current month's unbilled provisional charge — goes into the {amount} tag. */
+  /** The bill amount for the {amount} tag — the current month's provisional
+   * charge by default, or one specific month's outstanding when the sender
+   * picked a month. */
   currentMonthCharge: string;
   /** Total amount due (outstanding + current month) — goes into the {total} tag. */
   totalDue: string;
+  /** Overrides the {month} tag (e.g. "August 2026") when the reminder is
+   * targeted at a specific past billing month. Defaults to the current
+   * month's name. */
+  monthLabel?: string;
 }
 
 export interface PaymentLinkDateOverride {
@@ -184,7 +190,7 @@ export async function sendPaymentReminder(
   const now = new Date();
   return sendSms(reader.mobile, "reminder", {
     name: reader.name,
-    month: now.toLocaleString("en-US", { month: "long", timeZone: "UTC" }),
+    month: amounts?.monthLabel ?? now.toLocaleString("en-US", { month: "long", timeZone: "UTC" }),
     amount: amounts?.currentMonthCharge ?? reader.outstandingBalance,
     total: amounts?.totalDue ?? reader.outstandingBalance,
     dueDate: endOfMonth(now),

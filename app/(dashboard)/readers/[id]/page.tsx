@@ -3,7 +3,7 @@ import { notFound } from "next/navigation";
 import { getCurrentAppUser } from "@/lib/auth/session";
 import { getReader, listTransfersForReader, listAssignableCentersWithPocs } from "@/lib/data/readers";
 import { listAttendanceForReader } from "@/lib/data/attendance";
-import { getAmountDue, getBillingBreakdown, listLedgerForReader } from "@/lib/data/billing";
+import { getAmountDue, getBillingBreakdown, getReaderMonthlyLedger, listLedgerForReader } from "@/lib/data/billing";
 import { listPaymentsForReader } from "@/lib/data/payments";
 import { listCoupons, listCouponsForReader } from "@/lib/data/coupons";
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
@@ -51,11 +51,12 @@ export default async function ReaderProfilePage({
   const currentUser = await getCurrentAppUser();
   const isAdmin = currentUser?.role === "admin";
 
-  const [attendanceRows, billingBreakdown, amountDue, ledgerRows, paymentRows, appliedCoupons, availableCoupons, transfers, centers] =
+  const [attendanceRows, billingBreakdown, amountDue, monthlyLedger, ledgerRows, paymentRows, appliedCoupons, availableCoupons, transfers, centers] =
     await Promise.all([
       listAttendanceForReader(reader.id),
       getBillingBreakdown(reader.id),
       getAmountDue(reader.id),
+      getReaderMonthlyLedger(reader.id),
       listLedgerForReader(reader.id, dateFrom, dateTo),
       listPaymentsForReader(reader.id),
       listCouponsForReader(reader.id),
@@ -63,6 +64,12 @@ export default async function ReaderProfilePage({
       listTransfersForReader(reader.id),
       listAssignableCentersWithPocs(),
     ]);
+
+  // Billing months (past + current) that still have a balance — powers the
+  // "send reminder for a specific month" picker when a reader is behind.
+  const reminderMonths = monthlyLedger
+    .filter((r) => /^\d{4}-\d{2}$/.test(r.billingPeriod) && r.due > 0)
+    .map((r) => ({ billingPeriod: r.billingPeriod, due: r.due }));
 
   return (
     <div className="flex flex-col gap-6 overflow-x-auto">
@@ -81,7 +88,7 @@ export default async function ReaderProfilePage({
             >
               View Ledger
             </Button>
-            {!currentUser?.suspended && <SendReminderButton readerId={reader.id} />}
+            {!currentUser?.suspended && <SendReminderButton readerId={reader.id} months={reminderMonths} />}
             {!currentUser?.suspended && (
               <SendPaymentLinkButton
                 readerId={reader.id}
