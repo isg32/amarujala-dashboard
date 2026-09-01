@@ -1,6 +1,6 @@
 import "server-only";
 import { and, desc, eq, gte, ilike, inArray, lte, max, or, sql } from "drizzle-orm";
-import { requireAdmin, requireAppUser, type AppUser } from "@/lib/auth/session";
+import { requireAppUser, type AppUser } from "@/lib/auth/session";
 import { db } from "@/lib/db";
 import {
   readers,
@@ -345,6 +345,13 @@ function periodDateRange(billingPeriod: string): { periodStart: string; periodEn
   return { periodStart, periodEnd };
 }
 
+// 'YYYY-MM' -> the next calendar month's 'YYYY-MM'.
+function monthAfter(billingPeriod: string): string {
+  const [y, m] = billingPeriod.split("-").map(Number);
+  const d = new Date(Date.UTC(y, m, 1)); // m (1-based) used as 0-based index == next month
+  return `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, "0")}`;
+}
+
 async function getAttendanceCountsForPeriod(
   readerId: number,
   periodStart: string,
@@ -470,6 +477,61 @@ export async function getReaderMonthlyLedger(readerId: number): Promise<ReaderMo
       credit: net < 0 ? Math.round(Math.abs(net) * 100) / 100 : 0,
       ...counts,
     });
+  }
+
+  // Elapsed calendar months between subscription start and the current cycle
+  // that have NO ledger row at all — e.g. a month that was still the open
+  // cycle when the historical backfill last ran (so it was skipped) and has
+  // had no Close Subscription since. Without this the Monthly Ledger simply
+  // omits that month. Charge is computed live the same way the current cycle
+  // is; if a period_charge is posted for it later it moves into closedPeriods
+  // above with an identical figure. A month with no period_charge can't carry
+  // payments/discounts either (those would put it in ledgerGrouped), so
+  // paid/discounts are 0 here by construction.
+  const representedPeriods = new Set<string>([currentPeriod, ...closedPeriods.map((g) => g.billingPeriod!)]);
+  const missingPeriods: string[] = [];
+  for (
+    let p = context.subscriptionStartDate.slice(0, 7);
+    p < currentPeriod;
+    p = monthAfter(p)
+  ) {
+    if (!representedPeriods.has(p)) missingPeriods.push(p);
+  }
+
+  if (missingPeriods.length > 0) {
+    const [pricingHistory, overrides] = await Promise.all([
+      getCityPricingHistory(context.cityId),
+      getPriceOverridesFor(context.centerId, context.unitId),
+    ]);
+    for (const period of missingPeriods) {
+      const { periodStart, periodEnd } = periodDateRange(period);
+      const [attendanceMap, counts] = await Promise.all([
+        getAttendanceMap(readerId, periodStart, periodEnd),
+        getAttendanceCountsForPeriod(readerId, periodStart, periodEnd, today),
+      ]);
+      const charges = calculateCycleCharge({
+        cycleStart: periodStart,
+        cycleEnd: periodEnd,
+        subscriptionStartDate: context.subscriptionStartDate,
+        attendance: attendanceMap,
+        pricingHistory,
+        today: periodEnd, // fully elapsed month — bill the whole range
+        unmarkedDefault: unmarkedDefaultFor(),
+        ...overrides,
+      });
+      rows.push({
+        billingPeriod: period,
+        periodStart,
+        periodEnd,
+        isCurrentOpen: false,
+        charges: Math.round(charges * 100) / 100,
+        paid: 0,
+        discounts: 0,
+        due: charges > 0 ? Math.round(charges * 100) / 100 : 0,
+        credit: 0,
+        ...counts,
+      });
+    }
   }
 
   // Current (open) period — provisional charge unless the subscription is
