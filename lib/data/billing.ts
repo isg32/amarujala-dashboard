@@ -221,7 +221,13 @@ export async function getAmountDue(readerId: number): Promise<number> {
 function currentCycleFor(anchorDay: number | null, referenceDate: string) {
   if (anchorDay == null) {
     const billingPeriod = referenceDate.slice(0, 7);
-    return { cycleStart: `${billingPeriod}-01`, cycleEnd: `${billingPeriod}-31`, billingPeriod };
+    // Real last day of the month — NOT a hardcoded "-31", which is an invalid
+    // date string in any 30-day month (or February) and gets rejected by
+    // Postgres when it flows into an attendance date-range query
+    // (getAttendanceCountsForPeriod). Same idiom as periodDateRange below.
+    const [y, m] = billingPeriod.split("-").map(Number);
+    const cycleEnd = new Date(Date.UTC(y, m, 0)).toISOString().slice(0, 10);
+    return { cycleStart: `${billingPeriod}-01`, cycleEnd, billingPeriod };
   }
   const { cycleStart, cycleEnd } = getBillingCycle(anchorDay, referenceDate);
   return { cycleStart, cycleEnd, billingPeriod: cycleStart.slice(0, 7) };
