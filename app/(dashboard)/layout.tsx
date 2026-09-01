@@ -7,6 +7,15 @@ import { Separator } from "@/components/ui/separator";
 import { NavigationProgress } from "@/components/navigation-progress";
 import { AppSidebar } from "./app-sidebar";
 
+// Every route in this group reads the session (cookies) in this layout and
+// scopes its data per-user/per-role — none can ever be static. Declaring it
+// here stops `next build` from attempting a static prerender pass that is
+// guaranteed to bail, which is what produced the noisy
+// "[neon-auth] Cookie validation error … DYNAMIC_SERVER_USAGE" build logs.
+// (Route segment config still applies here — Cache Components is disabled;
+// see next.config.ts and CLAUDE.md.)
+export const dynamic = "force-dynamic";
+
 export default async function DashboardLayout({
   children,
 }: {
